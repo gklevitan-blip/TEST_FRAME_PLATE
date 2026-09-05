@@ -29,7 +29,7 @@
     background: #0c0c0c;
   }
   .stage {
-    border-radius: 18px;
+    border-radius: 0;
     display: block;
     position: relative;
     overflow: hidden;
@@ -44,7 +44,6 @@
   }
   .plashka.corner {
     display: inline-block;
-    max-width: 82%;
   }
   .plashka.full {
     inset: 0;
@@ -285,7 +284,7 @@
 <div class="stage-wrap">
   <div class="stage" id="stage">
     <div class="plashka full" id="plashka">
-      <div class="stage-title" id="stageTitle" contenteditable="true" spellcheck="false">ЗАГОЛОВОК СЮЖЕТА</div>
+      <div class="stage-title" id="stageTitle" contenteditable="true" spellcheck="false">Заголовок или подпись к видеосюжету</div>
     </div>
     <div class="stage-sub" id="stageSub"></div>
     <button id="closeFullscreenBtn" style="display:none; position:absolute; top:14px; right:14px; z-index:20; background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
@@ -327,7 +326,7 @@
         <div class="settings-grid">
           <div class="settings-col">
             <div class="settings-subhead">Размер</div>
-            <div class="num-field"><label>Шрифт, %</label><input type="number" id="fontSizeNum" min="20" max="400" step="1" value="100"></div>
+            <div class="num-field"><label>Шрифт, px</label><input type="number" id="fontSizeNum" min="10" max="300" step="1" value="48"></div>
             <div class="num-field"><label>Отступ плашки, %</label><input type="number" id="plashkaPadNum" min="0" max="400" step="1" value="100"></div>
             <div class="num-field"><label>Прозрачность плашки, %</label><input type="number" id="plashkaOpacityNum" min="0" max="100" step="1" value="100"></div>
           </div>
@@ -336,11 +335,7 @@
             <div class="num-field"><label>По горизонтали (X)</label><input type="number" id="plashkaPosXNum" min="-20" max="100" step="1" value="4"></div>
             <div class="num-field"><label>По вертикали (Y)</label><input type="number" id="plashkaPosYNum" min="-20" max="100" step="1" value="6"></div>
           </div>
-          <div class="settings-col">
-            <div class="settings-subhead">Смещение текста относительно плашки, px</div>
-            <div class="num-field"><label>По горизонтали (X)</label><input type="number" id="textOffXNum" min="-500" max="500" step="1" value="0"></div>
-            <div class="num-field"><label>По вертикали (Y)</label><input type="number" id="textOffYNum" min="-500" max="500" step="1" value="0"></div>
-          </div>
+
         </div>
         <div style="margin-top:6px;">
           <button id="resetSettingsBtn" class="btn">↺ Сбросить настройки к умолчаниям</button>
@@ -350,10 +345,12 @@
 
     <div class="control-block full-width">
       <div class="control-label">Сохранить сочетание</div>
+      <button id="clearComboAllBtn" class="btn" style="width:100%; margin-bottom:10px;">🗑 Сбросить цвета, текст и список (настройки не трогает)</button>
       <button id="copyComboBtn" class="btn" style="width:100%; margin-bottom:8px;">📋 Скопировать текущее</button>
       <button id="addToListBtn" class="btn" style="width:100%;">＋ Добавить в список ниже</button>
       <textarea id="comboListArea" placeholder="Сюда будут добавляться сохранённые сочетания — можно выделить и скопировать вручную" style="width:100%; height:110px; margin-top:10px; background:var(--panel-bg); color:var(--ink); border:1px solid var(--panel-line); border-radius:8px; padding:8px; font-size:12px; font-family:monospace; resize:vertical;"></textarea>
       <button id="copyAllBtn" class="btn" style="width:100%; margin-top:8px;">📋 Скопировать весь список</button>
+      <button id="clearListBtn" class="btn" style="width:100%; margin-top:8px;">🗑 Очистить список сочетаний</button>
     </div>
   </div>
 </div>
@@ -367,34 +364,33 @@
 <script>
 const DATA = {
   text: {
-    "green":     { hue:120, list:["F0FFF0:251","DFFFDF:246","CEFFCE:241","BCFFBC:236","ABFFAB:231","99FF99:226","88FF88:221","76FF76:216","65FF65:211","53FF53:206"] },
-    "chartreuse (салат)": { hue:90,  list:["F4FFE9:251","E6FFCD:246","D8FFB1:241","CAFF95:236","BCFF79:231","AEFF5D:226","A0FF41:221","92FF25:216","84FF09:211","6FFF00:206"] },
-    "mint":      { hue:155, list:["EFFFF8:251","DAFFF0:246","C5FFE7:241","B1FFDE:236","9CFFD6:231","88FFCD:226","73FFC5:221","5EFFBC:216","4AFFB3:211","35FFAB:206"] },
-    "cyan":      { hue:180, list:["F0FFFF:252","DEFFFF:248","CCFFFF:244","BAFFFF:240","A8FFFF:236","96FFFF:233","84FFFF:229","72FFFF:225","60FFFF:221","4EFFFF:217"] },
-    "azure (скорр.)": { hue:204, list:["E3F4FF:241","D8F0FF:236","CEECFF:231","C4E8FF:226","BAE4FF:221","B0E0FF:216","A6DCFF:211","9CD8FF:206","92D4FF:201","88D0FF:196"] },
-    "azure (исход.)": { hue:210, list:["F8FBFF:251","EFF7FF:246","E6F3FF:241","DEEEFF:236","D5EAFF:231","CCE6FF:226","C3E1FF:221","BBDDFF:216","B2D8FF:211","A9D4FF:206","A0D0FF:201","98CBFF:196"] },
-    "rose":      { hue:335, list:["FFF3F8:246","FFEDF4:241","FFE6F0:236","FFDFED:231","FFD9E9:226","FFD2E5:221","FFCCE1:216","FFC5DD:211","FFBED9:206","FFB8D5:201"] },
-    "red / pink":{ hue:0,   list:["FFEDED:241","FFE7E7:236","FFE1E1:231","FFDADA:226","FFD4D4:221","FFCDCD:216","FFC7C7:211","FFC1C1:206","FFBABA:201","FFB4B4:196"] },
-    "orange / персик": { hue:39, list:["FFF0D4:241","FFEAC4:236","FFE5B5:231","FFDFA6:226","FFDA96:221","FFD587:216","FFCF77:211","FFCA68:206","FFC459:201","FFBF49:196"] },
-    "yellow":    { hue:60,  list:["FFFFE3:253","FFFFC8:251","FFFFAC:249","FFFF90:247","FFFF74:245","FFFF59:243","FFFF3D:241","FFFF21:239","FFFF00:237"] },
-    "yellow W (тёплый)": { hue:50, list:["FCF7DC:246","FBF2C9:241","F9EEB5:236","F7E9A2:231","F6E58E:226","F4E07B:221","F3DB67:216","F1D754:211","F0D240:206","EECE2D:201"] },
-    "beige":     { hue:40,  list:["FDFBF8:251","F9F6EE:246","F6F1E5:241","F3EBDC:236","F0E6D3:231","EDE1C9:226","EADCC0:221","E7D7B7:216","E4D2AE:211","E1CDA4:206","DEC79B:201","DBC292:196"] },
-    "beige2":    { hue:40,  list:["FCFBF9:251","F8F6F1:246","F5F1E9:241","F1ECE1:236","EDE7DA:231","E9E1D2:226","E6DCCA:221","E2D7C2:216","DED2BB:211","DACDB3:206","D7C8AB:201","D3C3A3:196"] },
-    "blue (сиреневатый)": { hue:240, list:["DADAFF:221","D5D5FF:216","D0D0FF:211","CACAFF:206","C5C5FF:201","BFBFFF:196","BABAFF:191","B5B5FF:186","AFAFFF:181","AAAAFF:176"] },
+    "GREEN":     { hue:120, list:["F0FFF0:251","DFFFDF:246","CEFFCE:241","BCFFBC:236","ABFFAB:231","99FF99:226","88FF88:221","76FF76:216","65FF65:211","53FF53:206"] },
+    "SALAT": { hue:90,  list:["F4FFE9:251","E6FFCD:246","D8FFB1:241","CAFF95:236","BCFF79:231","AEFF5D:226","A0FF41:221","92FF25:216","84FF09:211","6FFF00:206"] },
+    "MINT":      { hue:155, list:["EFFFF8:251","DAFFF0:246","C5FFE7:241","B1FFDE:236","9CFFD6:231","88FFCD:226","73FFC5:221","5EFFBC:216","4AFFB3:211","35FFAB:206"] },
+    "CYAN":      { hue:180, list:["F0FFFF:252","DEFFFF:248","CCFFFF:244","BAFFFF:240","A8FFFF:236","96FFFF:233","84FFFF:229","72FFFF:225","60FFFF:221","4EFFFF:217"] },
+    "AZURE_1": { hue:204, list:["E3F4FF:241","D8F0FF:236","CEECFF:231","C4E8FF:226","BAE4FF:221","B0E0FF:216","A6DCFF:211","9CD8FF:206","92D4FF:201","88D0FF:196"] },
+    "AZURE_2": { hue:210, list:["F8FBFF:251","EFF7FF:246","E6F3FF:241","DEEEFF:236","D5EAFF:231","CCE6FF:226","C3E1FF:221","BBDDFF:216","B2D8FF:211","A9D4FF:206","A0D0FF:201","98CBFF:196"] },
+    "ROSE":      { hue:335, list:["FFF3F8:246","FFEDF4:241","FFE6F0:236","FFDFED:231","FFD9E9:226","FFD2E5:221","FFCCE1:216","FFC5DD:211","FFBED9:206","FFB8D5:201"] },
+    "RED":{ hue:0,   list:["FFEDED:241","FFE7E7:236","FFE1E1:231","FFDADA:226","FFD4D4:221","FFCDCD:216","FFC7C7:211","FFC1C1:206","FFBABA:201","FFB4B4:196"] },
+    "ORANGE": { hue:39, list:["FFF0D4:241","FFEAC4:236","FFE5B5:231","FFDFA6:226","FFDA96:221","FFD587:216","FFCF77:211","FFCA68:206","FFC459:201","FFBF49:196"] },
+    "YELLOW":    { hue:60,  list:["FFFFE3:253","FFFFC8:251","FFFFAC:249","FFFF90:247","FFFF74:245","FFFF59:243","FFFF3D:241","FFFF21:239","FFFF00:237"] },
+    "YELLOW_W": { hue:50, list:["FCF7DC:246","FBF2C9:241","F9EEB5:236","F7E9A2:231","F6E58E:226","F4E07B:221","F3DB67:216","F1D754:211","F0D240:206","EECE2D:201"] },
+    "BEIGE":     { hue:40,  list:["FDFBF8:251","F9F6EE:246","F6F1E5:241","F3EBDC:236","F0E6D3:231","EDE1C9:226","EADCC0:221","E7D7B7:216","E4D2AE:211","E1CDA4:206","DEC79B:201","DBC292:196"] },
+    "BLUE": { hue:240, list:["DADAFF:221","D5D5FF:216","D0D0FF:211","CACAFF:206","C5C5FF:201","BFBFFF:196","BABAFF:191","B5B5FF:186","AFAFFF:181","AAAAFF:176"] },
   },
   bg: {
-    "графит":       { hue:null, list:["111111:17","161616:22","1A1A1A:26","1F1F1F:31","242424:36","292929:41","2E2E2E:46"] },
-    "синяя ночь (azure, исход.)": { hue:210, list:["001327:16","001831:21","001E3D:26","002347:30","002A53:36","002F5D:40","003469:45"] },
-    "синяя ночь (azure, скорр.)": { hue:205, list:["001422:17","001A2B:22","001F33:26","00253D:31","002B47:36","003151:41","00375B:46"] },
-    "морская волна": { hue:185, list:["001517:17","001C1E:22","002124:26","00272B:31","002D31:36","003438:41","003A3F:46"] },
-    "cyan (тёмный)": { hue:193, list:["00161C:18","001C24:23","00212C:27","002732:32","002D3A:36","003342:41","00394A:46"] },
-    "blue (тёмный)": { hue:225, list:["001143:17","001656:22","001B6A:27","001F7A:31","00248E:36","0029A2:41","002DB2:45"] },
-    "green (тёмный)": { hue:120, list:["001500:15","001C00:20","002300:25","002A00:30","003100:35","003800:40","004000:46"] },
-    "olive (тёмный)": { hue:63, list:["121300:17","171800:22","1C1D00:27","212200:31","272700:36","2C2C00:41","313100:45"] },
-    "orange (тёмный)": { hue:29, list:["1F0F00:17","271300:22","301800:27","381C00:32","3F2000:36","472400:41","512800:46"] },
-    "brown (тёмный)": { hue:27, list:["1B1007:18","221408:22","29180A:27","311C0C:31","39200E:36","3F2510:41","462912:46"] },
-    "red (тёмный)": { hue:0, list:["500000:17","670000:22","7D0000:27","930000:31","AA0000:36","C00000:41","D70000:46"] },
-    "purple (тёмный)": { hue:280, list:["350050:17","440066:22","53007C:27","620092:31","7000A9:36","7F00BF:41","8E00D5:46"] },
+    "Graphite":       { hue:null, list:["111111:17","161616:22","1A1A1A:26","1F1F1F:31","242424:36","292929:41","2E2E2E:46"] },
+    "Azure_2": { hue:210, list:["001327:16","001831:21","001E3D:26","002347:30","002A53:36","002F5D:40","003469:45"] },
+    "Azure_1": { hue:205, list:["001422:17","001A2B:22","001F33:26","00253D:31","002B47:36","003151:41","00375B:46"] },
+    "Seawave": { hue:185, list:["001517:17","001C1E:22","002124:26","00272B:31","002D31:36","003438:41","003A3F:46"] },
+    "Cyan": { hue:193, list:["00161C:18","001C24:23","00212C:27","002732:32","002D3A:36","003342:41","00394A:46"] },
+    "Blue": { hue:225, list:["001143:17","001656:22","001B6A:27","001F7A:31","00248E:36","0029A2:41","002DB2:45"] },
+    "Green": { hue:120, list:["001500:15","001C00:20","002300:25","002A00:30","003100:35","003800:40","004000:46"] },
+    "Olive": { hue:63, list:["121300:17","171800:22","1C1D00:27","212200:31","272700:36","2C2C00:41","313100:45"] },
+    "Orange": { hue:29, list:["1F0F00:17","271300:22","301800:27","381C00:32","3F2000:36","472400:41","512800:46"] },
+    "Brown": { hue:27, list:["1B1007:18","221408:22","29180A:27","311C0C:31","39200E:36","3F2510:41","462912:46"] },
+    "Red": { hue:0, list:["500000:17","670000:22","7D0000:27","930000:31","AA0000:36","C00000:41","D70000:46"] },
+    "Purple": { hue:280, list:["350050:17","440066:22","53007C:27","620092:31","7000A9:36","7F00BF:41","8E00D5:46"] },
   }
 };
 
@@ -409,14 +405,13 @@ function hexToRgb(hex){
 const STORAGE_KEY = "paletteToolSettings_v1";
 
 const defaults = {
-  bgFamily: "графит", bgIndex: 3,
-  fgFamily: "mint", fgIndex: 5,
-  fontScale: 100, plashkaScale: 100, plashkaOpacity: 100,
+  bgFamily: "Graphite", bgIndex: 3,
+  fgFamily: "MINT", fgIndex: 5,
+  fontScale: 48, plashkaScale: 100, plashkaOpacity: 100,
   plashkaPosX: 4, plashkaPosY: 6,
-  textOffX: 0, textOffY: 0,
   plashkaEnabled: true,
   manualRatio: [16,9],
-  titleText: "ЗАГОЛОВОК СЮЖЕТА",
+  titleText: "Заголовок или подпись к видеосюжету",
   comboList: ""
 };
 
@@ -504,20 +499,24 @@ function refreshFgSwatches(){
   });
 }
 
+const REFERENCE_STAGE_WIDTH = 1920; // font/padding numbers are "as if stage were this wide" — keeps preview and fullscreen visually consistent
+
 function applySizes(){
   const title = document.getElementById("stageTitle");
   const plashka = document.getElementById("plashka");
+  const stage = document.getElementById("stage");
   const isFull = plashka.classList.contains("full");
-  const fontScale = state.fontScale/100;
-  const baseFontMin = isFull ? 28 : 18;
-  const baseFontMax = isFull ? 84 : 52;
-  const baseFontVw  = isFull ? 6 : 3.6;
-  title.style.fontSize = "clamp(" + (baseFontMin*fontScale) + "px, " + (baseFontVw*fontScale) + "vw, " + (baseFontMax*fontScale) + "px)";
-  title.style.transform = "translate(" + state.textOffX + "px, " + state.textOffY + "px)";
+  const stageW = stage.clientWidth || REFERENCE_STAGE_WIDTH;
+  const scale = stageW / REFERENCE_STAGE_WIDTH;
+
+  const fontPx = state.fontScale * scale;
+  title.style.fontSize = fontPx + "px";
 
   if (!isFull) {
     const padScale = state.plashkaScale/100;
-    plashka.style.padding = (0.6*padScale) + "em " + (0.9*padScale) + "em";
+    const padV = fontPx * 0.5 * padScale;
+    const padH = fontPx * 0.75 * padScale;
+    plashka.style.padding = padV + "px " + padH + "px";
     plashka.style.left = state.plashkaPosX + "%";
     plashka.style.bottom = state.plashkaPosY + "%";
     plashka.style.right = "auto";
@@ -570,8 +569,11 @@ function updateStage(){
   }
   applyPlashkaColor();
   document.getElementById("stageTitle").style.color = currentFgHex();
-  document.getElementById("stageSub").textContent =
-    "плашка " + currentBgHex().toUpperCase() + "  ·  текст " + currentFgHex().toUpperCase();
+  const fgLine = state.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase();
+  const bgLine = state.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase();
+  document.getElementById("stageSub").textContent = state.plashkaEnabled
+    ? (bgLine + "  ·  " + fgLine)
+    : fgLine;
   applySizes();
 }
 
@@ -582,8 +584,6 @@ function initControlsFromState(){
   document.getElementById("plashkaOpacityNum").value = state.plashkaOpacity;
   document.getElementById("plashkaPosXNum").value = state.plashkaPosX;
   document.getElementById("plashkaPosYNum").value = state.plashkaPosY;
-  document.getElementById("textOffXNum").value = state.textOffX;
-  document.getElementById("textOffYNum").value = state.textOffY;
   document.getElementById("plashkaEnabledCheck").checked = state.plashkaEnabled;
   document.getElementById("stageTitle").textContent = state.titleText;
   document.getElementById("comboListArea").value = state.comboList || "";
@@ -611,12 +611,10 @@ bindNumberInput("plashkaPadNum", "plashkaScale", applySizes);
 bindNumberInput("plashkaOpacityNum", "plashkaOpacity", applyPlashkaColor);
 bindNumberInput("plashkaPosXNum", "plashkaPosX", applySizes);
 bindNumberInput("plashkaPosYNum", "plashkaPosY", applySizes);
-bindNumberInput("textOffXNum", "textOffX", applySizes);
-bindNumberInput("textOffYNum", "textOffY", applySizes);
 
 document.getElementById("plashkaEnabledCheck").addEventListener("change", (e) => {
   state.plashkaEnabled = e.target.checked;
-  applyPlashkaColor();
+  updateStage();
   saveState();
 });
 
@@ -633,16 +631,43 @@ document.getElementById("resetSettingsBtn").addEventListener("click", () => {
   saveState();
 });
 
+document.getElementById("clearComboAllBtn").addEventListener("click", () => {
+  if (!confirm("Сбросить выбор цветов, текст заголовка и весь список сочетаний? Настройки размера/положения/прозрачности не изменятся.")) return;
+  state.bgFamily = defaults.bgFamily;
+  state.bgIndex = defaults.bgIndex;
+  state.fgFamily = defaults.fgFamily;
+  state.fgIndex = defaults.fgIndex;
+  state.titleText = defaults.titleText;
+  state.comboList = "";
+  bgSel.value = state.bgFamily;
+  fgSel.value = state.fgFamily;
+  refreshBgSwatches();
+  refreshFgSwatches();
+  document.getElementById("stageTitle").textContent = state.titleText;
+  document.getElementById("comboListArea").value = "";
+  updateStage();
+  saveState();
+});
+
+document.getElementById("clearListBtn").addEventListener("click", () => {
+  if (!confirm("Очистить весь список сохранённых сочетаний?")) return;
+  document.getElementById("comboListArea").value = "";
+  state.comboList = "";
+  saveState();
+});
+
 document.getElementById("openFullscreenBtn").addEventListener("click", () => {
   document.getElementById("stage").classList.add("fs-mode");
   document.getElementById("closeFullscreenBtn").style.display = "inline-block";
   document.body.style.overflow = "hidden";
+  setTimeout(applySizes, 50);
 });
 document.getElementById("closeFullscreenBtn").addEventListener("click", () => {
   document.getElementById("stage").classList.remove("fs-mode");
   document.getElementById("closeFullscreenBtn").style.display = "none";
   document.body.style.overflow = "";
   if (!frameImageURL) sizeStage();
+  setTimeout(applySizes, 50);
 });
 
 function copyText(text){
@@ -662,8 +687,11 @@ function fallbackCopy(text){
   document.body.removeChild(ta);
 }
 function comboString(){
-  let out = "Плашка: " + currentBgHex().toUpperCase() +
-    "\nШрифт: " + currentFgHex().toUpperCase();
+  const fgLine = state.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase();
+  const bgLine = state.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase();
+  let out = state.plashkaEnabled
+    ? ("Плашка: " + bgLine + "\nШрифт: " + fgLine)
+    : ("Шрифт: " + fgLine);
   if (frameFileName) out += "\nКадр: " + frameFileName;
   return out;
 }
@@ -704,7 +732,7 @@ document.querySelectorAll('.ratio-btn').forEach(btn => {
     saveState();
   });
 });
-window.addEventListener('resize', () => { if (!frameImageURL) sizeStage(); });
+window.addEventListener('resize', () => { if (!frameImageURL) sizeStage(); applySizes(); });
 
 document.getElementById("frameInput").addEventListener("change", (e) => {
   const file = e.target.files[0];
