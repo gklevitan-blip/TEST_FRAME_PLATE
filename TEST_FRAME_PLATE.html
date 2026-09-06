@@ -76,9 +76,9 @@
     right: 3%;
     font-size: 12px;
     letter-spacing: 0.02em;
-    opacity: 0.7;
+    opacity: 0.9;
     color: #fff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    text-shadow: 0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9);
     font-variant-numeric: tabular-nums;
     pointer-events: none;
   }
@@ -114,6 +114,90 @@
     cursor: pointer;
     border: 2px solid transparent;
     flex-shrink: 0;
+  }
+  .rainbow-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    padding: 3px;
+    background: conic-gradient(red, orange, yellow, greenyellow, green, cyan, blue, violet, magenta, red);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .rainbow-wrap input[type="color"] {
+    width: 100%;
+    height: 100%;
+    border: 2px solid #0c0c0c;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+  }
+  .rainbow-wrap input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  .rainbow-wrap input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+  .fs-color-controls {
+    display: none;
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 20;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .stage.fs-mode .fs-color-controls {
+    display: flex;
+  }
+  .fs-item {
+    position: relative;
+  }
+  .fs-rect {
+    width: 46px;
+    height: 32px;
+    border-radius: 6px;
+    border: 2px solid rgba(255,255,255,0.55);
+    cursor: pointer;
+    display: block;
+  }
+  .fs-label {
+    font-size: 11px;
+    color: #fff;
+    text-align: center;
+    margin-top: 5px;
+    text-shadow: 0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9);
+  }
+  .fs-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background: rgba(12,12,12,0.94);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    padding: 10px;
+    width: 230px;
+    z-index: 30;
+  }
+  .fs-panel.open {
+    display: block;
+  }
+  .fs-panel select {
+    width: 100%;
+    background: var(--panel-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+  .fs-panel .swatch-row {
+    margin-top: 10px;
+  }
+  .fs-panel .rainbow-wrap {
+    margin-top: 10px;
   }
   .mini.selected {
     border-color: #ececec;
@@ -288,6 +372,26 @@
     </div>
     <div class="stage-sub" id="stageSub"></div>
     <button id="closeFullscreenBtn" style="display:none; position:absolute; top:14px; right:14px; z-index:20; background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
+    <div class="fs-color-controls">
+      <div class="fs-item">
+        <button class="fs-rect" id="bgFsRect" type="button"></button>
+        <div class="fs-label">Плашка</div>
+        <div class="fs-panel" id="bgFsPanel">
+          <select id="bgFsSelect"></select>
+          <div class="swatch-row" id="bgFsSwatches"></div>
+          <div class="rainbow-wrap" id="bgFsCustomWrap" style="display:none;"><input type="color" id="bgCustomColorFS"></div>
+        </div>
+      </div>
+      <div class="fs-item">
+        <button class="fs-rect" id="fgFsRect" type="button"></button>
+        <div class="fs-label">Шрифт</div>
+        <div class="fs-panel" id="fgFsPanel">
+          <select id="fgFsSelect"></select>
+          <div class="swatch-row" id="fgFsSwatches"></div>
+          <div class="rainbow-wrap" id="fgFsCustomWrap" style="display:none;"><input type="color" id="fgCustomColorFS"></div>
+        </div>
+      </div>
+    </div>
   </div>
   <div style="text-align:right; margin-top:10px;">
     <button id="openFullscreenBtn" class="btn">⤢ Во весь экран</button>
@@ -309,11 +413,19 @@
       <div class="control-label">Плашка (под текстом, слева снизу)</div>
       <select id="bgFamilySelect"></select>
       <div class="swatch-row" id="bgSwatches" style="margin-top:10px;"></div>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
+        <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
+        <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+      </div>
     </div>
     <div class="control-block">
       <div class="control-label">Шрифт (текст)</div>
       <select id="fgFamilySelect"></select>
       <div class="swatch-row" id="fgSwatches" style="margin-top:10px;"></div>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
+        <div class="rainbow-wrap"><input type="color" id="fgCustomColor"></div>
+        <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+      </div>
     </div>
 
     <div class="control-block full-width">
@@ -413,7 +525,9 @@ const defaults = {
   plashkaEnabled: true,
   manualRatio: [16,9],
   titleText: "Заголовок или подпись к видеосюжету",
-  comboList: ""
+  comboList: "",
+  bgCustomHex: null,
+  fgCustomHex: null
 };
 
 function loadState(){
@@ -442,11 +556,13 @@ function clampIndex(idx, len){
 }
 
 function currentBgHex(){
+  if (state.bgCustomHex) return state.bgCustomHex;
   const list = DATA.bg[state.bgFamily].list;
   const idx = clampIndex(state.bgIndex, list.length);
   return hexOf(list[idx]);
 }
 function currentFgHex(){
+  if (state.fgCustomHex) return state.fgCustomHex;
   const list = DATA.text[state.fgFamily].list;
   const idx = clampIndex(state.fgIndex, list.length);
   return hexOf(list[idx]);
@@ -477,28 +593,87 @@ function renderSwatchRow(container, familyName, obj, activeIdx, onPick){
   });
 }
 
+function pickBgSwatch(pickedIdx){
+  state.bgIndex = pickedIdx;
+  state.bgCustomHex = null;
+  syncBgUI();
+  updateStage();
+  saveState();
+}
+function pickFgSwatch(pickedIdx){
+  state.fgIndex = pickedIdx;
+  state.fgCustomHex = null;
+  syncFgUI();
+  updateStage();
+  saveState();
+}
+function setBgFamily(name){
+  state.bgFamily = name;
+  state.bgIndex = clampIndex(state.bgIndex, DATA.bg[name].list.length);
+  state.bgCustomHex = null;
+  syncBgUI();
+  updateStage();
+  saveState();
+}
+function setFgFamily(name){
+  state.fgFamily = name;
+  state.fgIndex = clampIndex(state.fgIndex, DATA.text[name].list.length);
+  state.fgCustomHex = null;
+  syncFgUI();
+  updateStage();
+  saveState();
+}
+
 function refreshBgSwatches(){
   const container = document.getElementById("bgSwatches");
   const list = DATA.bg[state.bgFamily].list;
-  const idx = clampIndex(state.bgIndex, list.length);
-  renderSwatchRow(container, state.bgFamily, DATA.bg, idx, (pickedIdx) => {
-    state.bgIndex = pickedIdx;
-    refreshBgSwatches();
-    updateStage();
-    saveState();
-  });
+  const idx = state.bgCustomHex ? -1 : clampIndex(state.bgIndex, list.length);
+  renderSwatchRow(container, state.bgFamily, DATA.bg, idx, pickBgSwatch);
 }
 function refreshFgSwatches(){
   const container = document.getElementById("fgSwatches");
   const list = DATA.text[state.fgFamily].list;
-  const idx = clampIndex(state.fgIndex, list.length);
-  renderSwatchRow(container, state.fgFamily, DATA.text, idx, (pickedIdx) => {
-    state.fgIndex = pickedIdx;
-    refreshFgSwatches();
-    updateStage();
-    saveState();
-  });
+  const idx = state.fgCustomHex ? -1 : clampIndex(state.fgIndex, list.length);
+  renderSwatchRow(container, state.fgFamily, DATA.text, idx, pickFgSwatch);
 }
+function refreshBgFsSwatches(){
+  const container = document.getElementById("bgFsSwatches");
+  const list = DATA.bg[state.bgFamily].list;
+  const idx = state.bgCustomHex ? -1 : clampIndex(state.bgIndex, list.length);
+  renderSwatchRow(container, state.bgFamily, DATA.bg, idx, pickBgSwatch);
+}
+function refreshFgFsSwatches(){
+  const container = document.getElementById("fgFsSwatches");
+  const list = DATA.text[state.fgFamily].list;
+  const idx = state.fgCustomHex ? -1 : clampIndex(state.fgIndex, list.length);
+  renderSwatchRow(container, state.fgFamily, DATA.text, idx, pickFgSwatch);
+}
+
+function syncBgUI(){
+  const bgSelEl = document.getElementById("bgFamilySelect");
+  const bgFsSelEl = document.getElementById("bgFsSelect");
+  if (bgSelEl) bgSelEl.value = state.bgFamily;
+  if (bgFsSelEl) bgFsSelEl.value = state.bgCustomHex ? "__custom__" : state.bgFamily;
+  refreshBgSwatches();
+  refreshBgFsSwatches();
+  const wrap = document.getElementById("bgFsCustomWrap");
+  if (wrap) wrap.style.display = state.bgCustomHex ? "block" : "none";
+  const rect = document.getElementById("bgFsRect");
+  if (rect) rect.style.background = currentBgHex();
+}
+function syncFgUI(){
+  const fgSelEl = document.getElementById("fgFamilySelect");
+  const fgFsSelEl = document.getElementById("fgFsSelect");
+  if (fgSelEl) fgSelEl.value = state.fgFamily;
+  if (fgFsSelEl) fgFsSelEl.value = state.fgCustomHex ? "__custom__" : state.fgFamily;
+  refreshFgSwatches();
+  refreshFgFsSwatches();
+  const wrap = document.getElementById("fgFsCustomWrap");
+  if (wrap) wrap.style.display = state.fgCustomHex ? "block" : "none";
+  const rect = document.getElementById("fgFsRect");
+  if (rect) rect.style.background = currentFgHex();
+}
+
 
 const REFERENCE_STAGE_WIDTH = 1920; // font/padding numbers are "as if stage were this wide" — keeps preview and fullscreen visually consistent
 
@@ -557,6 +732,33 @@ function sizeStage(){
   stage.style.height = Math.round(height) + "px";
 }
 
+function bgLabel(){
+  if (state.bgCustomHex) return "Свой_" + currentBgHex().replace("#","").toUpperCase();
+  const list = DATA.bg[state.bgFamily].list;
+  const idx = clampIndex(state.bgIndex, list.length);
+  return state.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
+}
+function fgLabel(){
+  if (state.fgCustomHex) return "Свой_" + currentFgHex().replace("#","").toUpperCase();
+  const list = DATA.text[state.fgFamily].list;
+  const idx = clampIndex(state.fgIndex, list.length);
+  return state.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
+}
+
+function relLum(hex){
+  const {r,g,b} = hexToRgb(hex);
+  const chan = [r,g,b].map(v => {
+    v = v/255;
+    return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+  });
+  return 0.2126*chan[0] + 0.7152*chan[1] + 0.0722*chan[2];
+}
+function contrastRatio(hexA, hexB){
+  const l1 = relLum(hexA), l2 = relLum(hexB);
+  const lighter = Math.max(l1,l2), darker = Math.min(l1,l2);
+  return (lighter+0.05)/(darker+0.05);
+}
+
 function updateStage(){
   const stage = document.getElementById("stage");
   const plashka = document.getElementById("plashka");
@@ -570,11 +772,14 @@ function updateStage(){
   }
   applyPlashkaColor();
   document.getElementById("stageTitle").style.color = currentFgHex();
-  const fgLine = state.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase();
-  const bgLine = state.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase();
-  document.getElementById("stageSub").textContent = state.plashkaEnabled
-    ? (bgLine + "  ·  " + fgLine)
-    : fgLine;
+  const fgLine = fgLabel();
+  const bgLine = bgLabel();
+  if (state.plashkaEnabled) {
+    const cr = contrastRatio(currentBgHex(), currentFgHex());
+    document.getElementById("stageSub").textContent = bgLine + "  ·  " + fgLine + "  ·  Контр. " + cr.toFixed(1);
+  } else {
+    document.getElementById("stageSub").textContent = fgLine;
+  }
   applySizes();
 }
 
@@ -588,6 +793,10 @@ function initControlsFromState(){
   document.getElementById("plashkaEnabledCheck").checked = state.plashkaEnabled;
   document.getElementById("stageTitle").textContent = state.titleText;
   document.getElementById("comboListArea").value = state.comboList || "";
+  document.getElementById("bgCustomColor").value = state.bgCustomHex || currentBgHex();
+  document.getElementById("fgCustomColor").value = state.fgCustomHex || currentFgHex();
+  document.getElementById("bgCustomColorFS").value = state.bgCustomHex || currentBgHex();
+  document.getElementById("fgCustomColorFS").value = state.fgCustomHex || currentFgHex();
 
   document.querySelectorAll('.ratio-btn').forEach(b => {
     const [w,h] = b.dataset.ratio.split('/').map(Number);
@@ -636,14 +845,16 @@ document.getElementById("clearComboAllBtn").addEventListener("click", () => {
   if (!confirm("Сбросить выбор цветов, текст заголовка и весь список сочетаний? Настройки размера/положения/прозрачности не изменятся.")) return;
   state.bgFamily = defaults.bgFamily;
   state.bgIndex = defaults.bgIndex;
+  state.bgCustomHex = null;
   state.fgFamily = defaults.fgFamily;
   state.fgIndex = defaults.fgIndex;
+  state.fgCustomHex = null;
   state.titleText = defaults.titleText;
   state.comboList = "";
   bgSel.value = state.bgFamily;
   fgSel.value = state.fgFamily;
-  refreshBgSwatches();
-  refreshFgSwatches();
+  syncBgUI();
+  syncFgUI();
   document.getElementById("stageTitle").textContent = state.titleText;
   document.getElementById("comboListArea").value = "";
   updateStage();
@@ -688,8 +899,8 @@ function fallbackCopy(text){
   document.body.removeChild(ta);
 }
 function comboString(){
-  const fgLine = state.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase();
-  const bgLine = state.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase();
+  const fgLine = fgLabel();
+  const bgLine = bgLabel();
   let out = state.plashkaEnabled
     ? ("Плашка: " + bgLine + "\nШрифт: " + fgLine)
     : ("Шрифт: " + fgLine);
@@ -773,26 +984,88 @@ document.getElementById("clearFrameBtn").addEventListener("click", () => {
 
 const bgSel = document.getElementById("bgFamilySelect");
 const fgSel = document.getElementById("fgFamilySelect");
-populateSelect(bgSel, DATA.bg, (name) => {
-  state.bgFamily = name;
-  state.bgIndex = clampIndex(state.bgIndex, DATA.bg[name].list.length);
-  refreshBgSwatches();
+populateSelect(bgSel, DATA.bg, setBgFamily);
+populateSelect(fgSel, DATA.text, setFgFamily);
+
+function populateFsSelect(sel, obj, onFamily, onCustom){
+  sel.innerHTML = "";
+  Object.keys(obj).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  const customOpt = document.createElement("option");
+  customOpt.value = "__custom__";
+  customOpt.textContent = "Свой цвет";
+  sel.appendChild(customOpt);
+  sel.onchange = () => {
+    if (sel.value === "__custom__") {
+      onCustom();
+    } else {
+      onFamily(sel.value);
+    }
+  };
+}
+
+const bgFsSel = document.getElementById("bgFsSelect");
+const fgFsSel = document.getElementById("fgFsSelect");
+populateFsSelect(bgFsSel, DATA.bg, setBgFamily, () => {
+  document.getElementById("bgFsCustomWrap").style.display = "block";
+  document.getElementById("bgCustomColorFS").click();
+});
+populateFsSelect(fgFsSel, DATA.text, setFgFamily, () => {
+  document.getElementById("fgFsCustomWrap").style.display = "block";
+  document.getElementById("fgCustomColorFS").click();
+});
+
+function setBgCustom(hex){
+  state.bgCustomHex = hex.toUpperCase();
+  document.getElementById("bgCustomColor").value = state.bgCustomHex;
+  document.getElementById("bgCustomColorFS").value = state.bgCustomHex;
+  syncBgUI();
   updateStage();
   saveState();
-});
-populateSelect(fgSel, DATA.text, (name) => {
-  state.fgFamily = name;
-  state.fgIndex = clampIndex(state.fgIndex, DATA.text[name].list.length);
-  refreshFgSwatches();
+}
+function setFgCustom(hex){
+  state.fgCustomHex = hex.toUpperCase();
+  document.getElementById("fgCustomColor").value = state.fgCustomHex;
+  document.getElementById("fgCustomColorFS").value = state.fgCustomHex;
+  syncFgUI();
   updateStage();
   saveState();
+}
+document.getElementById("bgCustomColor").addEventListener("input", (e) => setBgCustom(e.target.value));
+document.getElementById("bgCustomColorFS").addEventListener("input", (e) => setBgCustom(e.target.value));
+document.getElementById("fgCustomColor").addEventListener("input", (e) => setFgCustom(e.target.value));
+document.getElementById("fgCustomColorFS").addEventListener("input", (e) => setFgCustom(e.target.value));
+
+/* ---------- fullscreen mini-panels: open/close ---------- */
+function toggleFsPanel(panelId, otherPanelId){
+  const panel = document.getElementById(panelId);
+  const other = document.getElementById(otherPanelId);
+  const willOpen = !panel.classList.contains("open");
+  other.classList.remove("open");
+  panel.classList.toggle("open", willOpen);
+}
+document.getElementById("bgFsRect").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleFsPanel("bgFsPanel", "fgFsPanel");
 });
-bgSel.value = state.bgFamily;
-fgSel.value = state.fgFamily;
+document.getElementById("fgFsRect").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleFsPanel("fgFsPanel", "bgFsPanel");
+});
+document.getElementById("bgFsPanel").addEventListener("click", (e) => e.stopPropagation());
+document.getElementById("fgFsPanel").addEventListener("click", (e) => e.stopPropagation());
+document.getElementById("stage").addEventListener("click", () => {
+  document.getElementById("bgFsPanel").classList.remove("open");
+  document.getElementById("fgFsPanel").classList.remove("open");
+});
 
 initControlsFromState();
-refreshBgSwatches();
-refreshFgSwatches();
+syncBgUI();
+syncFgUI();
 updateStage();
 
 /* ---------- reference grid ---------- */
