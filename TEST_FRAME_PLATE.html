@@ -23,6 +23,10 @@
     min-height: 100%;
   }
 
+  .halo-text {
+    text-shadow: 0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9);
+  }
+
   /* ---------- STAGE ---------- */
   .stage-wrap {
     padding: 6vh 6vw 4vh;
@@ -41,46 +45,86 @@
   .plashka {
     position: absolute;
     border-radius: 6px;
-  }
-  .plashka.corner {
     display: inline-block;
-  }
-  .plashka.full {
-    inset: 0;
-    border-radius: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   .stage-title {
     font-weight: 600;
     letter-spacing: 0.01em;
     display: block;
     outline: none;
+    text-align: left;
+    white-space: nowrap;
   }
   .stage-title:focus {
     box-shadow: 0 0 0 2px rgba(255,255,255,0.25);
     border-radius: 4px;
   }
-  .plashka.corner .stage-title {
-    text-align: left;
-    white-space: nowrap;
-  }
-  .plashka.full .stage-title {
-    text-align: center;
-    padding: 0 5%;
-  }
   .stage-sub {
     position: absolute;
-    bottom: 3%;
+    top: 3%;
     right: 3%;
     font-size: 12px;
     letter-spacing: 0.02em;
     opacity: 0.9;
     color: #fff;
-    text-shadow: 0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9);
     font-variant-numeric: tabular-nums;
     pointer-events: none;
+  }
+  .stage.fs-mode .stage-sub {
+    top: auto;
+    bottom: 3%;
+  }
+
+  /* ---------- LEFT PANEL (frames) ---------- */
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 18px; height: 18px;
+  }
+  .frame-thumb {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+  }
+  .frame-thumb.active {
+    border-color: #ececec;
+    background: rgba(255,255,255,0.06);
+  }
+  .frame-thumb img {
+    width: 56px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .frame-thumb .fname {
+    font-size: 12px;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .frame-thumb .mark-check {
+    width: 18px; height: 18px;
+    flex-shrink: 0;
+    display: none;
+  }
+  .frame-thumb.selection-mode .mark-check {
+    display: block;
   }
 
   /* ---------- CONTROLS ---------- */
@@ -105,102 +149,28 @@
   .swatch-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
   }
   .mini {
     width: 34px;
     height: 34px;
     border-radius: 8px;
     cursor: pointer;
-    border: 2px solid transparent;
     flex-shrink: 0;
-  }
-  .rainbow-wrap {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    padding: 3px;
-    background: conic-gradient(red, orange, yellow, greenyellow, green, cyan, blue, violet, magenta, red);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-  .rainbow-wrap input[type="color"] {
-    width: 100%;
-    height: 100%;
-    border: 2px solid #0c0c0c;
-    border-radius: 50%;
-    padding: 0;
-    cursor: pointer;
-    background: none;
-  }
-  .rainbow-wrap input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
-  .rainbow-wrap input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
-  .fs-color-controls {
-    display: none;
-    position: absolute;
-    top: 14px;
-    left: 14px;
-    z-index: 20;
-    gap: 16px;
-    align-items: flex-start;
-  }
-  .stage.fs-mode .fs-color-controls {
-    display: flex;
-  }
-  .fs-item {
     position: relative;
+    overflow: hidden;
   }
-  .fs-rect {
-    width: 46px;
-    height: 32px;
-    border-radius: 6px;
-    border: 2px solid rgba(255,255,255,0.55);
-    cursor: pointer;
-    display: block;
-  }
-  .fs-label {
-    font-size: 11px;
-    color: #fff;
-    text-align: center;
-    margin-top: 5px;
-    text-shadow: 0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9);
-  }
-  .fs-panel {
-    display: none;
+  .mini.selected::after {
+    content: "";
     position: absolute;
-    top: 100%;
-    left: 0;
-    margin-top: 8px;
-    background: rgba(12,12,12,0.94);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 10px;
-    padding: 10px;
-    width: 230px;
-    z-index: 30;
-  }
-  .fs-panel.open {
-    display: block;
-  }
-  .fs-panel select {
-    width: 100%;
-    background: var(--panel-bg);
-    color: var(--ink);
-    border: 1px solid var(--panel-line);
-    border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 14px;
-  }
-  .fs-panel .swatch-row {
-    margin-top: 10px;
-  }
-  .fs-panel .rainbow-wrap {
-    margin-top: 10px;
-  }
-  .mini.selected {
-    border-color: #ececec;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 16px 16px 0;
+    border-color: transparent var(--corner-color, #fff) transparent transparent;
+    filter: drop-shadow(0 0 1.5px var(--corner-halo, rgba(0,0,0,0.9)));
   }
   select {
     appearance: none;
@@ -244,6 +214,7 @@
     cursor: pointer;
   }
   .btn:active { opacity: 0.7; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
   details.settings-panel {
     border: 1px solid var(--panel-line);
     border-radius: 10px;
@@ -271,14 +242,90 @@
     letter-spacing: 0.04em;
     margin: 4px 0 10px;
   }
-  .toggle-row {
-    display: flex;
+
+  .rainbow-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    padding: 3px;
+    background: conic-gradient(red, orange, yellow, greenyellow, green, cyan, blue, violet, magenta, red);
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
   }
-  .toggle-row input[type="checkbox"] {
-    width: 18px; height: 18px;
+  .rainbow-wrap input[type="color"] {
+    width: 100%;
+    height: 100%;
+    border: 2px solid #0c0c0c;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+  }
+  .rainbow-wrap input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  .rainbow-wrap input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+
+  .fs-color-controls {
+    display: none;
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 20;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .stage.fs-mode .fs-color-controls {
+    display: flex;
+  }
+  .fs-item {
+    position: relative;
+  }
+  .fs-rect {
+    width: 46px;
+    height: 32px;
+    border-radius: 6px;
+    border: 2px solid rgba(255,255,255,0.55);
+    cursor: pointer;
+    display: block;
+  }
+  .fs-label {
+    font-size: 11px;
+    color: #fff;
+    text-align: center;
+    margin-top: 5px;
+  }
+  .fs-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background: rgba(12,12,12,0.94);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    padding: 10px;
+    width: 230px;
+    z-index: 30;
+  }
+  .fs-panel.open {
+    display: block;
+  }
+  .fs-panel select {
+    width: 100%;
+    background: var(--panel-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+  .fs-panel .swatch-row {
+    margin-top: 10px;
+  }
+  .fs-panel .rainbow-wrap {
+    margin-top: 10px;
   }
 
   /* ---------- REFERENCE ---------- */
@@ -361,108 +408,124 @@
     margin: 0 !important;
     z-index: 999;
   }
+
+  .main-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .stage-col {
+    flex: 1;
+    min-width: 0;
+  }
+  .left-col {
+    width: 180px;
+    flex-shrink: 0;
+  }
+  @media (max-width: 800px) {
+    .main-layout { flex-direction: column; }
+    .left-col { width: 100%; }
+  }
 </style>
 </head>
 <body>
 
 <div class="stage-wrap">
-  <div class="stage" id="stage">
-    <div class="plashka full" id="plashka">
-      <div class="stage-title" id="stageTitle" contenteditable="true" spellcheck="false">Заголовок или подпись к видеосюжету</div>
-    </div>
-    <div class="stage-sub" id="stageSub"></div>
-    <button id="closeFullscreenBtn" style="display:none; position:absolute; top:14px; right:14px; z-index:20; background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
-    <div class="fs-color-controls">
-      <div class="fs-item">
-        <button class="fs-rect" id="bgFsRect" type="button"></button>
-        <div class="fs-label">Плашка</div>
-        <div class="fs-panel" id="bgFsPanel">
-          <select id="bgFsSelect"></select>
-          <div class="swatch-row" id="bgFsSwatches"></div>
-          <div class="rainbow-wrap" id="bgFsCustomWrap" style="display:none;"><input type="color" id="bgCustomColorFS"></div>
-        </div>
+  <div class="main-layout">
+    <div class="left-col left-panel">
+      <div class="toggle-row">
+        <input type="checkbox" id="plashkaEnabledCheck" checked>
+        <label for="plashkaEnabledCheck" style="font-size:13px;">Плашка</label>
       </div>
-      <div class="fs-item">
-        <button class="fs-rect" id="fgFsRect" type="button"></button>
-        <div class="fs-label">Шрифт</div>
-        <div class="fs-panel" id="fgFsPanel">
-          <select id="fgFsSelect"></select>
-          <div class="swatch-row" id="fgFsSwatches"></div>
-          <div class="rainbow-wrap" id="fgFsCustomWrap" style="display:none;"><input type="color" id="fgCustomColorFS"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div style="text-align:right; margin-top:10px;">
-    <button id="openFullscreenBtn" class="btn">⤢ Во весь экран</button>
-  </div>
-
-  <div class="controls">
-    <div class="control-block">
-      <div class="control-label">Кадр (картинка вместо плашки)</div>
-      <input type="file" id="frameInput" accept="image/*" style="color:var(--ink); font-size:13px; margin-bottom:8px;">
-      <div id="frameNameLabel" style="font-size:12px; color:var(--ink-dim); margin-bottom:6px;"></div>
-      <button id="clearFrameBtn" class="btn" style="display:none; margin-right:8px;">Убрать кадр, вернуть плашку</button>
-      <div style="margin-top:10px; font-size:12px; color:var(--ink-dim);">Пропорция (без кадра):</div>
-      <div style="display:flex; gap:8px; margin-top:6px;">
-        <button class="ratio-btn btn" data-ratio="16/9">16:9</button>
-        <button class="ratio-btn btn" data-ratio="4/3">4:3</button>
-      </div>
-    </div>
-    <div class="control-block">
-      <div class="control-label">Плашка (под текстом, слева снизу)</div>
-      <select id="bgFamilySelect"></select>
-      <div class="swatch-row" id="bgSwatches" style="margin-top:10px;"></div>
-      <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
-        <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
-        <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
-      </div>
-    </div>
-    <div class="control-block">
-      <div class="control-label">Шрифт (текст)</div>
-      <select id="fgFamilySelect"></select>
-      <div class="swatch-row" id="fgSwatches" style="margin-top:10px;"></div>
-      <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
-        <div class="rainbow-wrap"><input type="color" id="fgCustomColor"></div>
-        <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
-      </div>
+      <input type="file" id="frameInput" accept="image/*" style="display:none;">
+      <button id="addFrameBtn" class="btn">＋ Выбрать файл</button>
+      <div style="font-size:11px; color:var(--ink-dim);" id="frameCountLabel">0 / 5 кадров</div>
+      <div id="frameGallery" style="margin-top:10px;"></div>
+      <button id="showGalleryBtn" class="btn" style="margin-top:10px;">Выбрать</button>
+      <button id="deleteMarkedBtn" class="btn" style="display:none; margin-top:8px;">🗑 Удалить</button>
     </div>
 
-    <div class="control-block full-width">
-      <details class="settings-panel" id="settingsPanel">
-        <summary>⚙ Настройки: размер, положение, прозрачность</summary>
-        <div class="toggle-row" style="margin-top:14px;">
-          <input type="checkbox" id="plashkaEnabledCheck" checked>
-          <label for="plashkaEnabledCheck" style="font-size:13px;">Плашка включена (при выключении текст получает тёмный halo для читаемости)</label>
+    <div class="stage-col">
+      <div class="stage" id="stage">
+        <div class="plashka" id="plashka">
+          <div class="stage-title" id="stageTitle" contenteditable="true" spellcheck="false"></div>
         </div>
-        <div class="settings-grid">
-          <div class="settings-col">
-            <div class="settings-subhead">Размер</div>
-            <div class="num-field"><label>Шрифт, px</label><input type="number" id="fontSizeNum" min="10" max="300" step="1" value="48"></div>
-            <div class="num-field"><label>Отступ плашки, %</label><input type="number" id="plashkaPadNum" min="0" max="400" step="1" value="100"></div>
-            <div class="num-field"><label>Прозрачность плашки, %</label><input type="number" id="plashkaOpacityNum" min="0" max="100" step="1" value="100"></div>
+        <div class="stage-sub halo-text" id="stageSub"></div>
+        <button id="closeFullscreenBtn" style="display:none; position:absolute; top:14px; right:14px; z-index:20; background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
+        <div class="fs-color-controls">
+          <div class="fs-item">
+            <button class="fs-rect" id="bgFsRect" type="button"></button>
+            <div class="fs-label halo-text">Плашка</div>
+            <div class="fs-panel" id="bgFsPanel">
+              <select id="bgFsSelect"></select>
+              <div class="swatch-row" id="bgFsSwatches"></div>
+              <div class="rainbow-wrap" id="bgFsCustomWrap" style="display:none;"><input type="color" id="bgCustomColorFS"></div>
+            </div>
           </div>
-          <div class="settings-col">
-            <div class="settings-subhead">Положение плашки (от левого/нижнего края, %)</div>
-            <div class="num-field"><label>По горизонтали (X)</label><input type="number" id="plashkaPosXNum" min="-20" max="100" step="1" value="4"></div>
-            <div class="num-field"><label>По вертикали (Y)</label><input type="number" id="plashkaPosYNum" min="-20" max="100" step="1" value="6"></div>
+          <div class="fs-item">
+            <button class="fs-rect" id="fgFsRect" type="button"></button>
+            <div class="fs-label halo-text">Шрифт</div>
+            <div class="fs-panel" id="fgFsPanel">
+              <select id="fgFsSelect"></select>
+              <div class="swatch-row" id="fgFsSwatches"></div>
+              <div class="rainbow-wrap" id="fgFsCustomWrap" style="display:none;"><input type="color" id="fgCustomColorFS"></div>
+            </div>
           </div>
-
         </div>
-        <div style="margin-top:6px;">
-          <button id="resetSettingsBtn" class="btn">↺ Сбросить настройки к умолчаниям</button>
-        </div>
-      </details>
-    </div>
+      </div>
+      <div style="text-align:right; margin-top:10px;">
+        <button id="openFullscreenBtn" class="btn">⤢ Во весь экран</button>
+      </div>
 
-    <div class="control-block full-width">
-      <div class="control-label">Сохранить сочетание</div>
-      <button id="clearComboAllBtn" class="btn" style="width:100%; margin-bottom:10px;">🗑 Сбросить цвета, текст и список (настройки не трогает)</button>
-      <button id="copyComboBtn" class="btn" style="width:100%; margin-bottom:8px;">📋 Скопировать текущее</button>
-      <button id="addToListBtn" class="btn" style="width:100%;">＋ Добавить в список ниже</button>
-      <textarea id="comboListArea" placeholder="Сюда будут добавляться сохранённые сочетания — можно выделить и скопировать вручную" style="width:100%; height:110px; margin-top:10px; background:var(--panel-bg); color:var(--ink); border:1px solid var(--panel-line); border-radius:8px; padding:8px; font-size:12px; font-family:monospace; resize:vertical;"></textarea>
-      <button id="copyAllBtn" class="btn" style="width:100%; margin-top:8px;">📋 Скопировать весь список</button>
-      <button id="clearListBtn" class="btn" style="width:100%; margin-top:8px;">🗑 Очистить список сочетаний</button>
+      <div class="controls">
+        <div class="control-block">
+          <div class="control-label">Плашка</div>
+          <select id="bgFamilySelect"></select>
+          <div class="swatch-row" id="bgSwatches" style="margin-top:10px;"></div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
+            <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
+            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+          </div>
+          <button id="addToListBtn" class="btn" style="width:100%; margin-top:16px;">＋ Добавить в список ниже</button>
+        </div>
+        <div class="control-block">
+          <div class="control-label">Шрифт</div>
+          <select id="fgFamilySelect"></select>
+          <div class="swatch-row" id="fgSwatches" style="margin-top:10px;"></div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
+            <div class="rainbow-wrap"><input type="color" id="fgCustomColor"></div>
+            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+          </div>
+        </div>
+
+        <div class="control-block full-width">
+          <details class="settings-panel" id="settingsPanel">
+            <summary>⚙ Настройки: размер, положение, прозрачность</summary>
+            <div class="settings-grid" style="margin-top:14px;">
+              <div class="settings-col">
+                <div class="settings-subhead">Размер</div>
+                <div class="num-field"><label>Шрифт Title, px</label><input type="number" id="titleFontSizeNum" min="10" max="300" step="1"></div>
+                <div class="num-field"><label>Шрифт Subtitle, px</label><input type="number" id="subtitleFontSizeNum" min="10" max="300" step="1"></div>
+                <div class="num-field"><label>Отступ плашки, %</label><input type="number" id="plashkaPadNum" min="0" max="400" step="1"></div>
+                <div class="num-field"><label>Прозрачность плашки, %</label><input type="number" id="plashkaOpacityNum" min="0" max="100" step="1"></div>
+              </div>
+              <div class="settings-col">
+                <div class="settings-subhead">Положение плашки, %</div>
+                <div class="num-field"><label>По горизонтали (X)</label><input type="number" id="plashkaPosXNum" min="-20" max="100" step="1"></div>
+                <div class="num-field"><label>По вертикали (Y)</label><input type="number" id="plashkaPosYNum" min="-20" max="100" step="1"></div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="control-block full-width">
+          <div class="control-label">Сохранить сочетание</div>
+          <button id="copyComboBtn" class="btn" style="width:100%; margin-bottom:8px;">📋 Скопировать текущее</button>
+          <textarea id="comboListArea" placeholder="Сюда будут добавляться сохранённые сочетания — можно выделить и скопировать вручную" style="width:100%; height:110px; margin-top:10px; background:var(--panel-bg); color:var(--ink); border:1px solid var(--panel-line); border-radius:8px; padding:8px; font-size:12px; font-family:monospace; resize:vertical;"></textarea>
+          <button id="copyAllBtn" class="btn" style="width:100%; margin-top:8px;">📋 Скопировать весь список</button>
+          <button id="clearListBtn" class="btn" style="width:100%; margin-top:8px;">🗑 Очистить список сочетаний</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -481,13 +544,13 @@ const DATA = {
     "MINT":      { hue:155, list:["EFFFF8:251","DAFFF0:246","C5FFE7:241","B1FFDE:236","9CFFD6:231","88FFCD:226","73FFC5:221","5EFFBC:216","4AFFB3:211","35FFAB:206"] },
     "CYAN":      { hue:180, list:["F0FFFF:252","DEFFFF:248","CCFFFF:244","BAFFFF:240","A8FFFF:236","96FFFF:233","84FFFF:229","72FFFF:225","60FFFF:221","4EFFFF:217"] },
     "AZURE_1": { hue:204, list:["E3F4FF:241","D8F0FF:236","CEECFF:231","C4E8FF:226","BAE4FF:221","B0E0FF:216","A6DCFF:211","9CD8FF:206","92D4FF:201","88D0FF:196"] },
-    "AZURE_2": { hue:210, list:["F8FBFF:251","EFF7FF:246","E6F3FF:241","DEEEFF:236","D5EAFF:231","CCE6FF:226","C3E1FF:221","BBDDFF:216","B2D8FF:211","A9D4FF:206","A0D0FF:201","98CBFF:196"] },
+    "AZURE_2": { hue:210, list:["E6F3FF:241","DEEEFF:236","D5EAFF:231","CCE6FF:226","C3E1FF:221","BBDDFF:216","B2D8FF:211","A9D4FF:206","A0D0FF:201","98CBFF:196"] },
     "ROSE":      { hue:335, list:["FFF3F8:246","FFEDF4:241","FFE6F0:236","FFDFED:231","FFD9E9:226","FFD2E5:221","FFCCE1:216","FFC5DD:211","FFBED9:206","FFB8D5:201"] },
     "RED":{ hue:0,   list:["FFEDED:241","FFE7E7:236","FFE1E1:231","FFDADA:226","FFD4D4:221","FFCDCD:216","FFC7C7:211","FFC1C1:206","FFBABA:201","FFB4B4:196"] },
     "ORANGE": { hue:39, list:["FFF0D4:241","FFEAC4:236","FFE5B5:231","FFDFA6:226","FFDA96:221","FFD587:216","FFCF77:211","FFCA68:206","FFC459:201","FFBF49:196"] },
     "YELLOW":    { hue:60,  list:["FFFFE3:253","FFFFC8:251","FFFFAC:249","FFFF90:247","FFFF74:245","FFFF59:243","FFFF3D:241","FFFF21:239","FFFF00:237"] },
     "YELLOW_W": { hue:50, list:["FCF7DC:246","FBF2C9:241","F9EEB5:236","F7E9A2:231","F6E58E:226","F4E07B:221","F3DB67:216","F1D754:211","F0D240:206","EECE2D:201"] },
-    "BEIGE":     { hue:40,  list:["FDFBF8:251","F9F6EE:246","F6F1E5:241","F3EBDC:236","F0E6D3:231","EDE1C9:226","EADCC0:221","E7D7B7:216","E4D2AE:211","E1CDA4:206","DEC79B:201","DBC292:196"] },
+    "BEIGE":     { hue:40,  list:["F6F1E5:241","F3EBDC:236","F0E6D3:231","EDE1C9:226","EADCC0:221","E7D7B7:216","E4D2AE:211","E1CDA4:206","DEC79B:201","DBC292:196"] },
     "OLIVE":     { hue:70,  list:["EAEFD4:236","E5EBC9:231","E0E6BE:226","DAE2B3:221","D5DEA8:216","CFDA9C:211","CAD591:206","C5D186:201","BFCD7B:196","BAC970:191"] },
     "BLUE": { hue:240, list:["DADAFF:221","D5D5FF:216","D0D0FF:211","CACAFF:206","C5C5FF:201","BFBFFF:196","BABAFF:191","B5B5FF:186","AFAFFF:181","AAAAFF:176"] },
   },
@@ -507,6 +570,10 @@ const DATA = {
   }
 };
 
+const PLACEHOLDER_IMG = "data:image/svg+xml;utf8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#7A8C74"/></svg>'
+);
+
 function hexOf(entry){ return "#" + entry.split(":")[0]; }
 function lOf(entry){ return entry.split(":")[1]; }
 function hexRaw(entry){ return entry.split(":")[0]; }
@@ -515,40 +582,59 @@ function hexToRgb(hex){
   return { r: parseInt(h.substring(0,2),16), g: parseInt(h.substring(2,4),16), b: parseInt(h.substring(4,6),16) };
 }
 
-const STORAGE_KEY = "paletteToolSettings_v1";
+const STORAGE_KEY = "paletteToolSettings_v2";
+const MAX_FRAMES = 5;
+const DEFAULT_TITLE = "Заголовок или подпись к видеосюжету";
 
-const defaults = {
-  bgFamily: "Graphite", bgIndex: 3,
-  fgFamily: "MINT", fgIndex: 5,
-  fontScale: 48, plashkaScale: 100, plashkaOpacity: 100,
-  plashkaPosX: 4, plashkaPosY: 6,
-  plashkaEnabled: true,
-  manualRatio: [16,9],
-  titleText: "Заголовок или подпись к видеосюжету",
-  comboList: "",
-  bgCustomHex: null,
-  fgCustomHex: null
-};
+function defaultFrameSettings(fileName, dataURL){
+  return {
+    id: "f" + Date.now() + Math.random().toString(36).slice(2,7),
+    fileName: fileName,
+    dataURL: dataURL,
+    bgFamily: null, bgIndex: 0, bgCustomHex: "#000000",
+    fgFamily: null, fgIndex: 0, fgCustomHex: "#FFFFFF",
+    titleFontScale: 48, subtitleFontScale: 48, plashkaScale: 100, plashkaOpacity: 60,
+    plashkaPosX: 3, plashkaPosY: 3,
+    plashkaEnabled: true,
+    titleText: DEFAULT_TITLE
+  };
+}
 
 function loadState(){
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return Object.assign({}, defaults);
+    if (!raw) return { frames: [], activeFrameId: null, comboList: "" };
     const parsed = JSON.parse(raw);
-    return Object.assign({}, defaults, parsed);
+    return {
+      frames: Array.isArray(parsed.frames) ? parsed.frames : [],
+      activeFrameId: parsed.activeFrameId || null,
+      comboList: parsed.comboList || ""
+    };
   } catch(e){
-    return Object.assign({}, defaults);
+    return { frames: [], activeFrameId: null, comboList: "" };
   }
 }
 function saveState(){
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch(e){ /* ignore quota errors */ }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      frames: state.frames,
+      activeFrameId: state.activeFrameId,
+      comboList: state.comboList
+    }));
+  } catch(e){ /* quota exceeded etc */ }
 }
 
 let state = loadState();
-let frameImageURL = null;
-let frameFileName = null;
+let placeholderSettings = defaultFrameSettings(null, PLACEHOLDER_IMG);
+let markedForDelete = new Set();
+
+function activeFrame(){
+  const f = state.frames.find(fr => fr.id === state.activeFrameId);
+  return f || placeholderSettings;
+}
+function isUsingRealFrame(){
+  return !!state.frames.find(fr => fr.id === state.activeFrameId);
+}
 
 function clampIndex(idx, len){
   if (len <= 0) return 0;
@@ -556,15 +642,17 @@ function clampIndex(idx, len){
 }
 
 function currentBgHex(){
-  if (state.bgCustomHex) return state.bgCustomHex;
-  const list = DATA.bg[state.bgFamily].list;
-  const idx = clampIndex(state.bgIndex, list.length);
+  const f = activeFrame();
+  if (f.bgCustomHex) return f.bgCustomHex;
+  const list = DATA.bg[f.bgFamily].list;
+  const idx = clampIndex(f.bgIndex, list.length);
   return hexOf(list[idx]);
 }
 function currentFgHex(){
-  if (state.fgCustomHex) return state.fgCustomHex;
-  const list = DATA.text[state.fgFamily].list;
-  const idx = clampIndex(state.fgIndex, list.length);
+  const f = activeFrame();
+  if (f.fgCustomHex) return f.fgCustomHex;
+  const list = DATA.text[f.fgFamily].list;
+  const idx = clampIndex(f.fgIndex, list.length);
   return hexOf(list[idx]);
 }
 
@@ -578,171 +666,150 @@ function populateSelect(sel, obj, onChange){
   });
   sel.onchange = () => onChange(sel.value);
 }
+function populateFsSelect(sel, obj, onFamily, onCustom){
+  sel.innerHTML = "";
+  Object.keys(obj).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  const customOpt = document.createElement("option");
+  customOpt.value = "__custom__";
+  customOpt.textContent = "Свой цвет";
+  sel.appendChild(customOpt);
+  sel.onchange = () => {
+    if (sel.value === "__custom__") onCustom();
+    else onFamily(sel.value);
+  };
+}
 
+function simpleLuma(hex){
+  const {r,g,b} = hexToRgb(hex);
+  return 0.2126*r + 0.7152*g + 0.0722*b;
+}
 function renderSwatchRow(container, familyName, obj, activeIdx, onPick){
   container.innerHTML = "";
+  if (!familyName) return;
   obj[familyName].list.forEach((entry, idx) => {
     const hex = hexOf(entry);
     const div = document.createElement("div");
     div.className = "mini";
     div.style.background = hex;
-    if (idx === activeIdx) div.classList.add("selected");
+    if (idx === activeIdx) {
+      div.classList.add("selected");
+      const light = simpleLuma(hex) > 128;
+      div.style.setProperty("--corner-color", light ? "#000000" : "#FFFFFF");
+      div.style.setProperty("--corner-halo", light ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.9)");
+    }
     div.title = hexRaw(entry) + "  L=" + lOf(entry);
     div.onclick = () => onPick(idx);
     container.appendChild(div);
   });
 }
 
-function pickBgSwatch(pickedIdx){
-  state.bgIndex = pickedIdx;
-  state.bgCustomHex = null;
-  syncBgUI();
-  updateStage();
-  saveState();
+function pickBgSwatch(idx){
+  const f = activeFrame();
+  f.bgIndex = idx;
+  f.bgCustomHex = null;
+  syncBgUI(); updateStage(); saveState();
 }
-function pickFgSwatch(pickedIdx){
-  state.fgIndex = pickedIdx;
-  state.fgCustomHex = null;
-  syncFgUI();
-  updateStage();
-  saveState();
+function pickFgSwatch(idx){
+  const f = activeFrame();
+  f.fgIndex = idx;
+  f.fgCustomHex = null;
+  syncFgUI(); updateStage(); saveState();
 }
 function setBgFamily(name){
-  state.bgFamily = name;
-  state.bgIndex = clampIndex(state.bgIndex, DATA.bg[name].list.length);
-  state.bgCustomHex = null;
-  syncBgUI();
-  updateStage();
-  saveState();
+  const f = activeFrame();
+  f.bgFamily = name;
+  f.bgIndex = clampIndex(f.bgIndex, DATA.bg[name].list.length);
+  f.bgCustomHex = null;
+  syncBgUI(); updateStage(); saveState();
 }
 function setFgFamily(name){
-  state.fgFamily = name;
-  state.fgIndex = clampIndex(state.fgIndex, DATA.text[name].list.length);
-  state.fgCustomHex = null;
-  syncFgUI();
-  updateStage();
-  saveState();
+  const f = activeFrame();
+  f.fgFamily = name;
+  f.fgIndex = clampIndex(f.fgIndex, DATA.text[name].list.length);
+  f.fgCustomHex = null;
+  syncFgUI(); updateStage(); saveState();
+}
+function setBgCustom(hex){
+  const f = activeFrame();
+  f.bgCustomHex = hex.toUpperCase();
+  document.getElementById("bgCustomColor").value = f.bgCustomHex;
+  document.getElementById("bgCustomColorFS").value = f.bgCustomHex;
+  syncBgUI(); updateStage(); saveState();
+}
+function setFgCustom(hex){
+  const f = activeFrame();
+  f.fgCustomHex = hex.toUpperCase();
+  document.getElementById("fgCustomColor").value = f.fgCustomHex;
+  document.getElementById("fgCustomColorFS").value = f.fgCustomHex;
+  syncFgUI(); updateStage(); saveState();
 }
 
 function refreshBgSwatches(){
-  const container = document.getElementById("bgSwatches");
-  const list = DATA.bg[state.bgFamily].list;
-  const idx = state.bgCustomHex ? -1 : clampIndex(state.bgIndex, list.length);
-  renderSwatchRow(container, state.bgFamily, DATA.bg, idx, pickBgSwatch);
+  const f = activeFrame();
+  const idx = f.bgCustomHex ? -1 : clampIndex(f.bgIndex, f.bgFamily ? DATA.bg[f.bgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("bgSwatches"), f.bgFamily, DATA.bg, idx, pickBgSwatch);
 }
 function refreshFgSwatches(){
-  const container = document.getElementById("fgSwatches");
-  const list = DATA.text[state.fgFamily].list;
-  const idx = state.fgCustomHex ? -1 : clampIndex(state.fgIndex, list.length);
-  renderSwatchRow(container, state.fgFamily, DATA.text, idx, pickFgSwatch);
+  const f = activeFrame();
+  const idx = f.fgCustomHex ? -1 : clampIndex(f.fgIndex, f.fgFamily ? DATA.text[f.fgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("fgSwatches"), f.fgFamily, DATA.text, idx, pickFgSwatch);
 }
 function refreshBgFsSwatches(){
-  const container = document.getElementById("bgFsSwatches");
-  const list = DATA.bg[state.bgFamily].list;
-  const idx = state.bgCustomHex ? -1 : clampIndex(state.bgIndex, list.length);
-  renderSwatchRow(container, state.bgFamily, DATA.bg, idx, pickBgSwatch);
+  const f = activeFrame();
+  const idx = f.bgCustomHex ? -1 : clampIndex(f.bgIndex, f.bgFamily ? DATA.bg[f.bgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("bgFsSwatches"), f.bgFamily, DATA.bg, idx, pickBgSwatch);
 }
 function refreshFgFsSwatches(){
-  const container = document.getElementById("fgFsSwatches");
-  const list = DATA.text[state.fgFamily].list;
-  const idx = state.fgCustomHex ? -1 : clampIndex(state.fgIndex, list.length);
-  renderSwatchRow(container, state.fgFamily, DATA.text, idx, pickFgSwatch);
+  const f = activeFrame();
+  const idx = f.fgCustomHex ? -1 : clampIndex(f.fgIndex, f.fgFamily ? DATA.text[f.fgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("fgFsSwatches"), f.fgFamily, DATA.text, idx, pickFgSwatch);
 }
 
 function syncBgUI(){
+  const f = activeFrame();
   const bgSelEl = document.getElementById("bgFamilySelect");
   const bgFsSelEl = document.getElementById("bgFsSelect");
-  if (bgSelEl) bgSelEl.value = state.bgFamily;
-  if (bgFsSelEl) bgFsSelEl.value = state.bgCustomHex ? "__custom__" : state.bgFamily;
+  if (f.bgFamily && bgSelEl) bgSelEl.value = f.bgFamily;
+  if (bgFsSelEl) bgFsSelEl.value = f.bgCustomHex ? "__custom__" : (f.bgFamily || "__custom__");
   refreshBgSwatches();
   refreshBgFsSwatches();
-  const wrap = document.getElementById("bgFsCustomWrap");
-  if (wrap) wrap.style.display = state.bgCustomHex ? "block" : "none";
-  const rect = document.getElementById("bgFsRect");
-  if (rect) rect.style.background = currentBgHex();
+  document.getElementById("bgFsCustomWrap").style.display = f.bgCustomHex ? "block" : "none";
+  document.getElementById("bgFsRect").style.background = currentBgHex();
+  document.getElementById("bgCustomColor").value = currentBgHex();
+  document.getElementById("bgCustomColorFS").value = currentBgHex();
 }
 function syncFgUI(){
+  const f = activeFrame();
   const fgSelEl = document.getElementById("fgFamilySelect");
   const fgFsSelEl = document.getElementById("fgFsSelect");
-  if (fgSelEl) fgSelEl.value = state.fgFamily;
-  if (fgFsSelEl) fgFsSelEl.value = state.fgCustomHex ? "__custom__" : state.fgFamily;
+  if (f.fgFamily && fgSelEl) fgSelEl.value = f.fgFamily;
+  if (fgFsSelEl) fgFsSelEl.value = f.fgCustomHex ? "__custom__" : (f.fgFamily || "__custom__");
   refreshFgSwatches();
   refreshFgFsSwatches();
-  const wrap = document.getElementById("fgFsCustomWrap");
-  if (wrap) wrap.style.display = state.fgCustomHex ? "block" : "none";
-  const rect = document.getElementById("fgFsRect");
-  if (rect) rect.style.background = currentFgHex();
-}
-
-
-const REFERENCE_STAGE_WIDTH = 1920; // font/padding numbers are "as if stage were this wide" — keeps preview and fullscreen visually consistent
-
-function applySizes(){
-  const title = document.getElementById("stageTitle");
-  const plashka = document.getElementById("plashka");
-  const stage = document.getElementById("stage");
-  const isFull = plashka.classList.contains("full");
-  const stageW = stage.clientWidth || REFERENCE_STAGE_WIDTH;
-  const scale = stageW / REFERENCE_STAGE_WIDTH;
-
-  const fontPx = state.fontScale * scale;
-  title.style.fontSize = fontPx + "px";
-
-  if (!isFull) {
-    const padScale = state.plashkaScale/100;
-    const padV = fontPx * 0.5 * padScale;
-    const padH = fontPx * 0.75 * padScale;
-    plashka.style.padding = padV + "px " + padH + "px";
-    plashka.style.left = state.plashkaPosX + "%";
-    plashka.style.bottom = state.plashkaPosY + "%";
-    plashka.style.right = "auto";
-    plashka.style.top = "auto";
-  }
-}
-
-function applyPlashkaColor(){
-  const plashka = document.getElementById("plashka");
-  const title = document.getElementById("stageTitle");
-  if (!state.plashkaEnabled) {
-    plashka.style.backgroundColor = "transparent";
-    title.style.textShadow =
-      "0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9)";
-    return;
-  }
-  title.style.textShadow = "none";
-  const {r,g,b} = hexToRgb(currentBgHex());
-  const a = state.plashkaOpacity/100;
-  plashka.style.backgroundColor = "rgba(" + r + "," + g + "," + b + "," + a + ")";
-}
-
-function sizeStage(){
-  const stage = document.getElementById("stage");
-  const wrap = stage.parentElement;
-  const isMobile = window.innerWidth < 640;
-  const maxW = wrap.clientWidth;
-  const maxH = window.innerHeight * (isMobile ? 0.40 : 0.62);
-  const [rw, rh] = state.manualRatio;
-  let width = maxW;
-  let height = width * rh / rw;
-  if (height > maxH) {
-    height = maxH;
-    width = height * rw / rh;
-  }
-  stage.style.width = Math.round(width) + "px";
-  stage.style.height = Math.round(height) + "px";
+  document.getElementById("fgFsCustomWrap").style.display = f.fgCustomHex ? "block" : "none";
+  document.getElementById("fgFsRect").style.background = currentFgHex();
+  document.getElementById("fgCustomColor").value = currentFgHex();
+  document.getElementById("fgCustomColorFS").value = currentFgHex();
 }
 
 function bgLabel(){
-  if (state.bgCustomHex) return "Свой_" + currentBgHex().replace("#","").toUpperCase();
-  const list = DATA.bg[state.bgFamily].list;
-  const idx = clampIndex(state.bgIndex, list.length);
-  return state.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
+  const f = activeFrame();
+  if (f.bgCustomHex) return "Свой_" + currentBgHex().replace("#","").toUpperCase();
+  const list = DATA.bg[f.bgFamily].list;
+  const idx = clampIndex(f.bgIndex, list.length);
+  return f.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
 }
 function fgLabel(){
-  if (state.fgCustomHex) return "Свой_" + currentFgHex().replace("#","").toUpperCase();
-  const list = DATA.text[state.fgFamily].list;
-  const idx = clampIndex(state.fgIndex, list.length);
-  return state.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
+  const f = activeFrame();
+  if (f.fgCustomHex) return "Свой_" + currentFgHex().replace("#","").toUpperCase();
+  const list = DATA.text[f.fgFamily].list;
+  const idx = clampIndex(f.fgIndex, list.length);
+  return f.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
 }
 
 function relLum(hex){
@@ -759,112 +826,120 @@ function contrastRatio(hexA, hexB){
   return (lighter+0.05)/(darker+0.05);
 }
 
-function updateStage(){
-  const stage = document.getElementById("stage");
+const REFERENCE_STAGE_WIDTH = 1920;
+
+function applySizes(){
+  const f = activeFrame();
+  const title = document.getElementById("stageTitle");
   const plashka = document.getElementById("plashka");
-  if (frameImageURL) {
-    stage.style.backgroundImage = "url(" + frameImageURL + ")";
-    plashka.className = "plashka corner";
-  } else {
-    stage.style.backgroundImage = "none";
-    plashka.className = "plashka full";
-    sizeStage();
+  const stage = document.getElementById("stage");
+  const stageW = stage.clientWidth || REFERENCE_STAGE_WIDTH;
+  const scale = stageW / REFERENCE_STAGE_WIDTH;
+
+  const rawFont = f.plashkaEnabled ? f.titleFontScale : f.subtitleFontScale;
+  const fontPx = rawFont * scale;
+  title.style.fontSize = fontPx + "px";
+
+  const padScale = f.plashkaScale/100;
+  const padV = fontPx * 0.5 * padScale;
+  const padH = fontPx * 0.75 * padScale;
+  plashka.style.padding = padV + "px " + padH + "px";
+  plashka.style.left = f.plashkaPosX + "%";
+  plashka.style.bottom = f.plashkaPosY + "%";
+  plashka.style.right = "auto";
+  plashka.style.top = "auto";
+}
+
+function applyPlashkaColor(){
+  const f = activeFrame();
+  const plashka = document.getElementById("plashka");
+  const title = document.getElementById("stageTitle");
+  if (!f.plashkaEnabled) {
+    plashka.style.backgroundColor = "transparent";
+    title.style.textShadow =
+      "0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9)";
+    return;
   }
+  title.style.textShadow = "none";
+  const {r,g,b} = hexToRgb(currentBgHex());
+  const a = f.plashkaOpacity/100;
+  plashka.style.backgroundColor = "rgba(" + r + "," + g + "," + b + "," + a + ")";
+}
+
+function sizeStageToImage(dataURL){
+  const stage = document.getElementById("stage");
+  const wrap = stage.parentElement;
+  const img = new Image();
+  img.onload = () => {
+    const isMobile = window.innerWidth < 640;
+    const maxW = wrap.clientWidth;
+    const maxH = window.innerHeight * (isMobile ? 0.40 : 0.62);
+    let width = maxW;
+    let height = width * img.naturalHeight / img.naturalWidth;
+    if (height > maxH) { height = maxH; width = height * img.naturalWidth / img.naturalHeight; }
+    stage.style.width = Math.round(width) + "px";
+    stage.style.height = Math.round(height) + "px";
+    applySizes();
+  };
+  img.src = dataURL;
+}
+
+function updateStage(){
+  const f = activeFrame();
+  const stage = document.getElementById("stage");
+  stage.style.backgroundImage = "url(" + f.dataURL + ")";
+  sizeStageToImage(f.dataURL);
   applyPlashkaColor();
   document.getElementById("stageTitle").style.color = currentFgHex();
+  document.getElementById("stageTitle").textContent = f.titleText;
+  document.getElementById("plashkaEnabledCheck").checked = f.plashkaEnabled;
+
   const fgLine = fgLabel();
   const bgLine = bgLabel();
-  if (state.plashkaEnabled) {
+  const sub = document.getElementById("stageSub");
+  if (f.plashkaEnabled) {
     const cr = contrastRatio(currentBgHex(), currentFgHex());
-    document.getElementById("stageSub").textContent = bgLine + "  ·  " + fgLine + "  ·  Контр. " + cr.toFixed(1);
+    sub.textContent = bgLine + "  ·  " + fgLine + "  ·  Контр. " + cr.toFixed(1);
   } else {
-    document.getElementById("stageSub").textContent = fgLine;
+    sub.textContent = fgLine;
   }
   applySizes();
+
+  document.getElementById("titleFontSizeNum").value = f.titleFontScale;
+  document.getElementById("subtitleFontSizeNum").value = f.subtitleFontScale;
+  document.getElementById("plashkaPadNum").value = f.plashkaScale;
+  document.getElementById("plashkaOpacityNum").value = f.plashkaOpacity;
+  document.getElementById("plashkaPosXNum").value = f.plashkaPosX;
+  document.getElementById("plashkaPosYNum").value = f.plashkaPosY;
+
+  renderGallery();
 }
 
-/* ---------- init controls from state ---------- */
-function initControlsFromState(){
-  document.getElementById("fontSizeNum").value = state.fontScale;
-  document.getElementById("plashkaPadNum").value = state.plashkaScale;
-  document.getElementById("plashkaOpacityNum").value = state.plashkaOpacity;
-  document.getElementById("plashkaPosXNum").value = state.plashkaPosX;
-  document.getElementById("plashkaPosYNum").value = state.plashkaPosY;
-  document.getElementById("plashkaEnabledCheck").checked = state.plashkaEnabled;
-  document.getElementById("stageTitle").textContent = state.titleText;
-  document.getElementById("comboListArea").value = state.comboList || "";
-  document.getElementById("bgCustomColor").value = state.bgCustomHex || currentBgHex();
-  document.getElementById("fgCustomColor").value = state.fgCustomHex || currentFgHex();
-  document.getElementById("bgCustomColorFS").value = state.bgCustomHex || currentBgHex();
-  document.getElementById("fgCustomColorFS").value = state.fgCustomHex || currentFgHex();
-
-  document.querySelectorAll('.ratio-btn').forEach(b => {
-    const [w,h] = b.dataset.ratio.split('/').map(Number);
-    b.style.borderColor = (w===state.manualRatio[0] && h===state.manualRatio[1]) ? '#ececec' : 'var(--panel-line)';
-  });
-}
-
-function bindNumberInput(id, stateKey, onAfter){
+function bindNumberInput(id, key, onAfter){
   const el = document.getElementById(id);
   el.addEventListener("input", () => {
     const v = parseFloat(el.value);
     if (!isNaN(v)) {
-      state[stateKey] = v;
+      activeFrame()[key] = v;
       if (onAfter) onAfter();
       saveState();
     }
   });
 }
-
-bindNumberInput("fontSizeNum", "fontScale", applySizes);
+bindNumberInput("titleFontSizeNum", "titleFontScale", applySizes);
+bindNumberInput("subtitleFontSizeNum", "subtitleFontScale", applySizes);
 bindNumberInput("plashkaPadNum", "plashkaScale", applySizes);
 bindNumberInput("plashkaOpacityNum", "plashkaOpacity", applyPlashkaColor);
 bindNumberInput("plashkaPosXNum", "plashkaPosX", applySizes);
 bindNumberInput("plashkaPosYNum", "plashkaPosY", applySizes);
 
 document.getElementById("plashkaEnabledCheck").addEventListener("change", (e) => {
-  state.plashkaEnabled = e.target.checked;
+  activeFrame().plashkaEnabled = e.target.checked;
   updateStage();
   saveState();
 });
-
 document.getElementById("stageTitle").addEventListener("input", (e) => {
-  state.titleText = e.target.textContent;
-  saveState();
-});
-
-document.getElementById("resetSettingsBtn").addEventListener("click", () => {
-  const keepFamily = { bgFamily: state.bgFamily, bgIndex: state.bgIndex, fgFamily: state.fgFamily, fgIndex: state.fgIndex, titleText: state.titleText, comboList: state.comboList };
-  state = Object.assign({}, defaults, keepFamily);
-  initControlsFromState();
-  updateStage();
-  saveState();
-});
-
-document.getElementById("clearComboAllBtn").addEventListener("click", () => {
-  if (!confirm("Сбросить выбор цветов, текст заголовка и весь список сочетаний? Настройки размера/положения/прозрачности не изменятся.")) return;
-  state.bgFamily = defaults.bgFamily;
-  state.bgIndex = defaults.bgIndex;
-  state.bgCustomHex = null;
-  state.fgFamily = defaults.fgFamily;
-  state.fgIndex = defaults.fgIndex;
-  state.fgCustomHex = null;
-  state.titleText = defaults.titleText;
-  state.comboList = "";
-  bgSel.value = state.bgFamily;
-  fgSel.value = state.fgFamily;
-  syncBgUI();
-  syncFgUI();
-  document.getElementById("stageTitle").textContent = state.titleText;
-  document.getElementById("comboListArea").value = "";
-  updateStage();
-  saveState();
-});
-
-document.getElementById("clearListBtn").addEventListener("click", () => {
-  if (!confirm("Очистить весь список сохранённых сочетаний?")) return;
-  document.getElementById("comboListArea").value = "";
-  state.comboList = "";
+  activeFrame().titleText = e.target.textContent;
   saveState();
 });
 
@@ -878,7 +953,6 @@ document.getElementById("closeFullscreenBtn").addEventListener("click", () => {
   document.getElementById("stage").classList.remove("fs-mode");
   document.getElementById("closeFullscreenBtn").style.display = "none";
   document.body.style.overflow = "";
-  if (!frameImageURL) sizeStage();
   setTimeout(applySizes, 50);
 });
 
@@ -899,12 +973,13 @@ function fallbackCopy(text){
   document.body.removeChild(ta);
 }
 function comboString(){
+  const f = activeFrame();
   const fgLine = fgLabel();
   const bgLine = bgLabel();
-  let out = state.plashkaEnabled
+  let out = f.plashkaEnabled
     ? ("Плашка: " + bgLine + "\nШрифт: " + fgLine)
     : ("Шрифт: " + fgLine);
-  if (frameFileName) out += "\nКадр: " + frameFileName;
+  if (isUsingRealFrame() && f.fileName) out += "\nКадр: " + f.fileName;
   return out;
 }
 function flashBtn(btn, text){
@@ -912,7 +987,6 @@ function flashBtn(btn, text){
   btn.textContent = text;
   setTimeout(()=>{ btn.textContent = old; }, 1200);
 }
-
 document.getElementById("copyComboBtn").addEventListener("click", () => {
   copyText(comboString());
   flashBtn(document.getElementById("copyComboBtn"), "Скопировано ✓");
@@ -933,80 +1007,92 @@ document.getElementById("comboListArea").addEventListener("input", (e) => {
   state.comboList = e.target.value;
   saveState();
 });
-
-document.querySelectorAll('.ratio-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const [w,h] = btn.dataset.ratio.split('/').map(Number);
-    state.manualRatio = [w,h];
-    document.querySelectorAll('.ratio-btn').forEach(b => b.style.borderColor = 'var(--panel-line)');
-    btn.style.borderColor = '#ececec';
-    if (!frameImageURL) sizeStage();
-    saveState();
-  });
+document.getElementById("clearListBtn").addEventListener("click", () => {
+  if (!confirm("Очистить весь список сохранённых сочетаний?")) return;
+  document.getElementById("comboListArea").value = "";
+  state.comboList = "";
+  saveState();
 });
-window.addEventListener('resize', () => { if (!frameImageURL) sizeStage(); applySizes(); });
 
+/* ---------- frame gallery ---------- */
+let selectionMode = false;
+
+function renderGallery(){
+  const gallery = document.getElementById("frameGallery");
+  gallery.innerHTML = "";
+  state.frames.forEach(fr => {
+    const row = document.createElement("div");
+    row.className = "frame-thumb" + (fr.id === state.activeFrameId ? " active" : "") + (selectionMode ? " selection-mode" : "");
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.className = "mark-check";
+    check.checked = markedForDelete.has(fr.id);
+    check.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (check.checked) markedForDelete.add(fr.id); else markedForDelete.delete(fr.id);
+    });
+    const img = document.createElement("img");
+    img.src = fr.dataURL;
+    const name = document.createElement("div");
+    name.className = "fname";
+    name.textContent = fr.fileName;
+    row.appendChild(check);
+    row.appendChild(img);
+    row.appendChild(name);
+    row.addEventListener("click", () => {
+      state.activeFrameId = fr.id;
+      syncBgUI(); syncFgUI(); updateStage(); saveState();
+    });
+    gallery.appendChild(row);
+  });
+  document.getElementById("frameCountLabel").textContent = state.frames.length + " / " + MAX_FRAMES + " кадров";
+  document.getElementById("addFrameBtn").disabled = state.frames.length >= MAX_FRAMES;
+}
+
+document.getElementById("showGalleryBtn").addEventListener("click", () => {
+  selectionMode = !selectionMode;
+  document.getElementById("showGalleryBtn").textContent = selectionMode ? "Отмена" : "Выбрать";
+  document.getElementById("deleteMarkedBtn").style.display = selectionMode ? "inline-block" : "none";
+  if (!selectionMode) markedForDelete.clear();
+  renderGallery();
+});
+document.getElementById("addFrameBtn").addEventListener("click", () => {
+  if (state.frames.length >= MAX_FRAMES) return;
+  document.getElementById("frameInput").click();
+});
 document.getElementById("frameInput").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  frameFileName = file.name;
-  document.getElementById("frameNameLabel").textContent = "Кадр: " + frameFileName;
+  if (state.frames.length >= MAX_FRAMES) return;
   const reader = new FileReader();
   reader.onload = (ev) => {
-    frameImageURL = ev.target.result;
-    const img = new Image();
-    img.onload = () => {
-      const stage = document.getElementById("stage");
-      const wrap = stage.parentElement;
-      const isMobile = window.innerWidth < 640;
-      const maxW = wrap.clientWidth;
-      const maxH = window.innerHeight * (isMobile ? 0.40 : 0.62);
-      let width = maxW;
-      let height = width * img.naturalHeight / img.naturalWidth;
-      if (height > maxH) { height = maxH; width = height * img.naturalWidth / img.naturalHeight; }
-      stage.style.width = Math.round(width) + "px";
-      stage.style.height = Math.round(height) + "px";
-      updateStage();
-    };
-    img.src = frameImageURL;
-    document.getElementById("clearFrameBtn").style.display = "inline-block";
+    const newFrame = defaultFrameSettings(file.name, ev.target.result);
+    state.frames.push(newFrame);
+    state.activeFrameId = newFrame.id;
+    syncBgUI(); syncFgUI(); updateStage(); saveState();
   };
   reader.readAsDataURL(file);
+  e.target.value = "";
 });
-document.getElementById("clearFrameBtn").addEventListener("click", () => {
-  frameImageURL = null;
-  frameFileName = null;
-  document.getElementById("frameInput").value = "";
-  document.getElementById("frameNameLabel").textContent = "";
-  document.getElementById("clearFrameBtn").style.display = "none";
-  updateStage();
+document.getElementById("deleteMarkedBtn").addEventListener("click", () => {
+  if (!markedForDelete.size) return;
+  if (!confirm("Удалить отмеченные кадры (" + markedForDelete.size + ")?")) return;
+  state.frames = state.frames.filter(fr => !markedForDelete.has(fr.id));
+  if (!state.frames.find(fr => fr.id === state.activeFrameId)) {
+    state.activeFrameId = state.frames.length ? state.frames[0].id : null;
+  }
+  markedForDelete.clear();
+  selectionMode = false;
+  document.getElementById("showGalleryBtn").textContent = "Выбрать";
+  document.getElementById("deleteMarkedBtn").style.display = "none";
+  syncBgUI(); syncFgUI(); updateStage(); saveState();
 });
 
+/* ---------- family selects (main + fullscreen) ---------- */
 const bgSel = document.getElementById("bgFamilySelect");
 const fgSel = document.getElementById("fgFamilySelect");
 populateSelect(bgSel, DATA.bg, setBgFamily);
 populateSelect(fgSel, DATA.text, setFgFamily);
-
-function populateFsSelect(sel, obj, onFamily, onCustom){
-  sel.innerHTML = "";
-  Object.keys(obj).forEach(name => {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    sel.appendChild(opt);
-  });
-  const customOpt = document.createElement("option");
-  customOpt.value = "__custom__";
-  customOpt.textContent = "Свой цвет";
-  sel.appendChild(customOpt);
-  sel.onchange = () => {
-    if (sel.value === "__custom__") {
-      onCustom();
-    } else {
-      onFamily(sel.value);
-    }
-  };
-}
 
 const bgFsSel = document.getElementById("bgFsSelect");
 const fgFsSel = document.getElementById("fgFsSelect");
@@ -1019,28 +1105,11 @@ populateFsSelect(fgFsSel, DATA.text, setFgFamily, () => {
   document.getElementById("fgCustomColorFS").click();
 });
 
-function setBgCustom(hex){
-  state.bgCustomHex = hex.toUpperCase();
-  document.getElementById("bgCustomColor").value = state.bgCustomHex;
-  document.getElementById("bgCustomColorFS").value = state.bgCustomHex;
-  syncBgUI();
-  updateStage();
-  saveState();
-}
-function setFgCustom(hex){
-  state.fgCustomHex = hex.toUpperCase();
-  document.getElementById("fgCustomColor").value = state.fgCustomHex;
-  document.getElementById("fgCustomColorFS").value = state.fgCustomHex;
-  syncFgUI();
-  updateStage();
-  saveState();
-}
 document.getElementById("bgCustomColor").addEventListener("input", (e) => setBgCustom(e.target.value));
 document.getElementById("bgCustomColorFS").addEventListener("input", (e) => setBgCustom(e.target.value));
 document.getElementById("fgCustomColor").addEventListener("input", (e) => setFgCustom(e.target.value));
 document.getElementById("fgCustomColorFS").addEventListener("input", (e) => setFgCustom(e.target.value));
 
-/* ---------- fullscreen mini-panels: open/close ---------- */
 function toggleFsPanel(panelId, otherPanelId){
   const panel = document.getElementById(panelId);
   const other = document.getElementById(otherPanelId);
@@ -1063,7 +1132,10 @@ document.getElementById("stage").addEventListener("click", () => {
   document.getElementById("fgFsPanel").classList.remove("open");
 });
 
-initControlsFromState();
+window.addEventListener('resize', () => { applySizes(); });
+
+/* ---------- init ---------- */
+document.getElementById("comboListArea").value = state.comboList || "";
 syncBgUI();
 syncFgUI();
 updateStage();
