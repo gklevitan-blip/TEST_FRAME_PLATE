@@ -523,6 +523,7 @@
           <button id="copyComboBtn" class="btn" style="width:100%; margin-bottom:8px;">📋 Скопировать текущее</button>
           <textarea id="comboListArea" placeholder="Сюда будут добавляться сохранённые сочетания — можно выделить и скопировать вручную" style="width:100%; height:110px; margin-top:10px; background:var(--panel-bg); color:var(--ink); border:1px solid var(--panel-line); border-radius:8px; padding:8px; font-size:12px; font-family:monospace; resize:vertical;"></textarea>
           <button id="copyAllBtn" class="btn" style="width:100%; margin-top:8px;">📋 Скопировать весь список</button>
+          <button id="downloadTxtBtn" class="btn" style="width:100%; margin-top:8px;">⬇ Скачать TXT-файл</button>
           <button id="clearListBtn" class="btn" style="width:100%; margin-top:8px;">🗑 Очистить список сочетаний</button>
         </div>
       </div>
@@ -603,15 +604,16 @@ function defaultFrameSettings(fileName, dataURL){
 function loadState(){
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { frames: [], activeFrameId: null, comboList: "" };
+    if (!raw) return { frames: [], activeFrameId: null, comboList: "", savedCombos: [] };
     const parsed = JSON.parse(raw);
     return {
       frames: Array.isArray(parsed.frames) ? parsed.frames : [],
       activeFrameId: parsed.activeFrameId || null,
-      comboList: parsed.comboList || ""
+      comboList: parsed.comboList || "",
+      savedCombos: Array.isArray(parsed.savedCombos) ? parsed.savedCombos : []
     };
   } catch(e){
-    return { frames: [], activeFrameId: null, comboList: "" };
+    return { frames: [], activeFrameId: null, comboList: "", savedCombos: [] };
   }
 }
 function saveState(){
@@ -619,7 +621,8 @@ function saveState(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       frames: state.frames,
       activeFrameId: state.activeFrameId,
-      comboList: state.comboList
+      comboList: state.comboList,
+      savedCombos: state.savedCombos
     }));
   } catch(e){ /* quota exceeded etc */ }
 }
@@ -996,8 +999,79 @@ document.getElementById("addToListBtn").addEventListener("click", () => {
   const sep = area.value.trim().length ? "\n\n---\n\n" : "";
   area.value = area.value + sep + comboString();
   state.comboList = area.value;
+
+  const f = activeFrame();
+  state.savedCombos.push({
+    fileName: f.fileName || "Без кадра",
+    dateStr: todayDateStr(),
+    plateHex: f.plashkaEnabled ? currentBgHex() : null,
+    fontHex: currentFgHex()
+  });
+
   saveState();
   flashBtn(document.getElementById("addToListBtn"), "Добавлено ✓");
+});
+
+function todayDateStr(){
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yyyy = d.getFullYear();
+  return dd + "." + mm + "." + yyyy;
+}
+
+function formatCombosTxt(){
+  if (!state.savedCombos.length) return "";
+  const groups = [];
+  const byName = {};
+  state.savedCombos.forEach(c => {
+    if (!byName[c.fileName]) {
+      byName[c.fileName] = { fileName: c.fileName, dateStr: c.dateStr, items: [] };
+      groups.push(byName[c.fileName]);
+    }
+    byName[c.fileName].items.push(c);
+  });
+  return groups.map(g => {
+    const header = g.fileName + ", " + g.dateStr;
+    const lines = g.items.map(c => {
+      const fontPart = "Font - " + c.fontHex.replace("#","").toUpperCase();
+      return c.plateHex
+        ? ("Plate - " + c.plateHex.replace("#","").toUpperCase() + ", " + fontPart)
+        : fontPart;
+    });
+    return header + "\n" + lines.join("\n");
+  }).join("\n\n");
+}
+
+async function downloadCombosTxt(){
+  const content = formatCombosTxt();
+  if (!content) { alert("Список сочетаний пуст — сначала добавьте хотя бы одно сочетание."); return; }
+  const fileName = "combos_" + todayDateStr().split(".").reverse().join("-") + ".txt";
+  const file = new File([content], fileName, { type: "text/plain" });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: fileName });
+      return;
+    } catch(e) {
+      if (e && e.name === "AbortError") return;
+      /* share failed for some other reason — fall through to normal download */
+    }
+  }
+
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+document.getElementById("downloadTxtBtn").addEventListener("click", () => {
+  downloadCombosTxt();
 });
 document.getElementById("copyAllBtn").addEventListener("click", () => {
   copyText(document.getElementById("comboListArea").value);
@@ -1011,6 +1085,7 @@ document.getElementById("clearListBtn").addEventListener("click", () => {
   if (!confirm("Очистить весь список сохранённых сочетаний?")) return;
   document.getElementById("comboListArea").value = "";
   state.comboList = "";
+  state.savedCombos = [];
   saveState();
 });
 
