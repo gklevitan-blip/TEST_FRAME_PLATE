@@ -72,7 +72,7 @@
   }
   .stage.fs-mode .stage-sub {
     top: auto;
-    bottom: 3%;
+    bottom: 0%;
   }
 
   /* ---------- LEFT PANEL (frames) ---------- */
@@ -451,7 +451,10 @@
           <div class="stage-title" id="stageTitle" contenteditable="true" spellcheck="false"></div>
         </div>
         <div class="stage-sub halo-text" id="stageSub"></div>
-        <button id="closeFullscreenBtn" style="display:none; position:absolute; top:14px; right:14px; z-index:20; background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
+        <div id="fsActionsWrap" style="display:none; position:absolute; top:14px; right:14px; z-index:20; flex-direction:column; align-items:flex-end; gap:57px;">
+          <button id="closeFullscreenBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
+          <button id="addToListFsBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">＋ Добавить</button>
+        </div>
         <div class="fs-color-controls">
           <div class="fs-item">
             <button class="fs-rect" id="bgFsRect" type="button"></button>
@@ -486,7 +489,7 @@
             <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
             <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
           </div>
-          <button id="addToListBtn" class="btn" style="width:100%; margin-top:16px;">＋ Добавить в список ниже</button>
+          <button id="addToListBtn" class="btn" style="width:100%; margin-top:16px;">＋ Добавить в список</button>
         </div>
         <div class="control-block">
           <div class="control-label">Шрифт</div>
@@ -587,15 +590,25 @@ const STORAGE_KEY = "paletteToolSettings_v2";
 const MAX_FRAMES = 5;
 const DEFAULT_TITLE = "Заголовок или подпись к видеосюжету";
 
+const HARDCODED_SIZING_DEFAULTS = {
+  titleFontScale: 48, subtitleFontScale: 48, plashkaScale: 100, plashkaOpacity: 60,
+  plashkaPosX: 3, plashkaPosY: 3
+};
+
 function defaultFrameSettings(fileName, dataURL){
+  // New frames (and the very first placeholder) start from the last sizing the
+  // user actually set, not from hardcoded numbers — so font/plate sizing doesn't
+  // appear to "reset" every time a new photo is added.
+  const sizing = (typeof state !== "undefined" && state.lastSizing) ? state.lastSizing : HARDCODED_SIZING_DEFAULTS;
   return {
     id: "f" + Date.now() + Math.random().toString(36).slice(2,7),
     fileName: fileName,
     dataURL: dataURL,
     bgFamily: null, bgIndex: 0, bgCustomHex: "#000000",
     fgFamily: null, fgIndex: 0, fgCustomHex: "#FFFFFF",
-    titleFontScale: 48, subtitleFontScale: 48, plashkaScale: 100, plashkaOpacity: 60,
-    plashkaPosX: 3, plashkaPosY: 3,
+    titleFontScale: sizing.titleFontScale, subtitleFontScale: sizing.subtitleFontScale,
+    plashkaScale: sizing.plashkaScale, plashkaOpacity: sizing.plashkaOpacity,
+    plashkaPosX: sizing.plashkaPosX, plashkaPosY: sizing.plashkaPosY,
     plashkaEnabled: true,
     titleText: DEFAULT_TITLE
   };
@@ -604,16 +617,18 @@ function defaultFrameSettings(fileName, dataURL){
 function loadState(){
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { frames: [], activeFrameId: null, comboList: "", savedCombos: [] };
+    if (!raw) return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null };
     const parsed = JSON.parse(raw);
     return {
       frames: Array.isArray(parsed.frames) ? parsed.frames : [],
       activeFrameId: parsed.activeFrameId || null,
       comboList: parsed.comboList || "",
-      savedCombos: Array.isArray(parsed.savedCombos) ? parsed.savedCombos : []
+      savedCombos: (Array.isArray(parsed.savedCombos) ? parsed.savedCombos : []).map(normalizeSavedCombo),
+      placeholderSettings: parsed.placeholderSettings || null,
+      lastSizing: parsed.lastSizing || null
     };
   } catch(e){
-    return { frames: [], activeFrameId: null, comboList: "", savedCombos: [] };
+    return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null };
   }
 }
 function saveState(){
@@ -622,18 +637,24 @@ function saveState(){
       frames: state.frames,
       activeFrameId: state.activeFrameId,
       comboList: state.comboList,
-      savedCombos: state.savedCombos
+      savedCombos: state.savedCombos,
+      placeholderSettings: state.placeholderSettings,
+      lastSizing: state.lastSizing
     }));
   } catch(e){ /* quota exceeded etc */ }
 }
 
 let state = loadState();
-let placeholderSettings = defaultFrameSettings(null, PLACEHOLDER_IMG);
+// Settings used when no real frame is uploaded/selected (the placeholder image).
+// These must be persisted too, or every visit without an active frame reset them to defaults.
+if (!state.placeholderSettings) {
+  state.placeholderSettings = defaultFrameSettings(null, PLACEHOLDER_IMG);
+}
 let markedForDelete = new Set();
 
 function activeFrame(){
   const f = state.frames.find(fr => fr.id === state.activeFrameId);
-  return f || placeholderSettings;
+  return f || state.placeholderSettings;
 }
 function isUsingRealFrame(){
   return !!state.frames.find(fr => fr.id === state.activeFrameId);
@@ -918,12 +939,20 @@ function updateStage(){
   renderGallery();
 }
 
+const SIZING_KEYS = ["titleFontScale", "subtitleFontScale", "plashkaScale", "plashkaOpacity", "plashkaPosX", "plashkaPosY"];
+function updateLastSizing(){
+  const f = activeFrame();
+  const snapshot = {};
+  SIZING_KEYS.forEach(k => { snapshot[k] = f[k]; });
+  state.lastSizing = snapshot;
+}
 function bindNumberInput(id, key, onAfter){
   const el = document.getElementById(id);
   el.addEventListener("input", () => {
     const v = parseFloat(el.value);
     if (!isNaN(v)) {
       activeFrame()[key] = v;
+      if (SIZING_KEYS.includes(key)) updateLastSizing();
       if (onAfter) onAfter();
       saveState();
     }
@@ -948,13 +977,13 @@ document.getElementById("stageTitle").addEventListener("input", (e) => {
 
 document.getElementById("openFullscreenBtn").addEventListener("click", () => {
   document.getElementById("stage").classList.add("fs-mode");
-  document.getElementById("closeFullscreenBtn").style.display = "inline-block";
+  document.getElementById("fsActionsWrap").style.display = "flex";
   document.body.style.overflow = "hidden";
   setTimeout(applySizes, 50);
 });
 document.getElementById("closeFullscreenBtn").addEventListener("click", () => {
   document.getElementById("stage").classList.remove("fs-mode");
-  document.getElementById("closeFullscreenBtn").style.display = "none";
+  document.getElementById("fsActionsWrap").style.display = "none";
   document.body.style.overflow = "";
   setTimeout(applySizes, 50);
 });
@@ -994,22 +1023,49 @@ document.getElementById("copyComboBtn").addEventListener("click", () => {
   copyText(comboString());
   flashBtn(document.getElementById("copyComboBtn"), "Скопировано ✓");
 });
-document.getElementById("addToListBtn").addEventListener("click", () => {
+function addComboToList(triggerBtn){
   const area = document.getElementById("comboListArea");
   const sep = area.value.trim().length ? "\n\n---\n\n" : "";
   area.value = area.value + sep + comboString();
   state.comboList = area.value;
 
   const f = activeFrame();
+
+  let plate = null;
+  if (f.plashkaEnabled) {
+    if (f.bgCustomHex) {
+      plate = { hex: currentBgHex(), family: null, index: null };
+    } else {
+      const list = DATA.bg[f.bgFamily].list;
+      const idx = clampIndex(f.bgIndex, list.length);
+      plate = { hex: currentBgHex(), family: f.bgFamily, index: idx + 1 };
+    }
+  }
+
+  let font;
+  if (f.fgCustomHex) {
+    font = { hex: currentFgHex(), family: null, index: null };
+  } else {
+    const list = DATA.text[f.fgFamily].list;
+    const idx = clampIndex(f.fgIndex, list.length);
+    font = { hex: currentFgHex(), family: f.fgFamily, index: idx + 1 };
+  }
+
   state.savedCombos.push({
     fileName: f.fileName || "Без кадра",
     dateStr: todayDateStr(),
-    plateHex: f.plashkaEnabled ? currentBgHex() : null,
-    fontHex: currentFgHex()
+    plate: plate,
+    font: font
   });
 
   saveState();
-  flashBtn(document.getElementById("addToListBtn"), "Добавлено ✓");
+  flashBtn(triggerBtn, "Добавлено ✓");
+}
+document.getElementById("addToListBtn").addEventListener("click", () => {
+  addComboToList(document.getElementById("addToListBtn"));
+});
+document.getElementById("addToListFsBtn").addEventListener("click", () => {
+  addComboToList(document.getElementById("addToListFsBtn"));
 });
 
 function todayDateStr(){
@@ -1018,6 +1074,30 @@ function todayDateStr(){
   const mm = String(d.getMonth()+1).padStart(2,"0");
   const yyyy = d.getFullYear();
   return dd + "." + mm + "." + yyyy;
+}
+function nowTimeStr(){
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2,"0");
+  const mi = String(d.getMinutes()).padStart(2,"0");
+  const ss = String(d.getSeconds()).padStart(2,"0");
+  return hh + "-" + mi + "-" + ss;
+}
+
+function normalizeSavedCombo(c){
+  // migrates entries saved by older versions of this tool (plateHex/fontHex strings)
+  if (c.plate !== undefined) return c;
+  return {
+    fileName: c.fileName,
+    dateStr: c.dateStr,
+    plate: c.plateHex ? { hex: c.plateHex, family: null, index: null } : null,
+    font: { hex: c.fontHex, family: null, index: null }
+  };
+}
+
+function hexWithFamily(entry){
+  const hex = entry.hex.replace("#","").toUpperCase();
+  if (entry.family) return hex + "(" + entry.family + ", " + entry.index + ")";
+  return hex + "(custom)";
 }
 
 function formatCombosTxt(){
@@ -1034,40 +1114,51 @@ function formatCombosTxt(){
   return groups.map(g => {
     const header = g.fileName + ", " + g.dateStr;
     const lines = g.items.map(c => {
-      const fontPart = "Font - " + c.fontHex.replace("#","").toUpperCase();
-      return c.plateHex
-        ? ("Plate - " + c.plateHex.replace("#","").toUpperCase() + ", " + fontPart)
+      const fontPart = "Font - " + hexWithFamily(c.font);
+      return c.plate
+        ? ("Plate - " + hexWithFamily(c.plate) + ", " + fontPart)
         : fontPart;
     });
-    return header + "\n" + lines.join("\n");
+    return header + "\n\n" + lines.join("\n");
   }).join("\n\n");
 }
 
+let downloadInProgress = false;
 async function downloadCombosTxt(){
+  if (downloadInProgress) return;
   const content = formatCombosTxt();
   if (!content) { alert("Список сочетаний пуст — сначала добавьте хотя бы одно сочетание."); return; }
-  const fileName = "combos_" + todayDateStr().split(".").reverse().join("-") + ".txt";
-  const file = new File([content], fileName, { type: "text/plain" });
 
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: fileName });
-      return;
-    } catch(e) {
-      if (e && e.name === "AbortError") return;
-      /* share failed for some other reason — fall through to normal download */
+  downloadInProgress = true;
+  const btn = document.getElementById("downloadTxtBtn");
+  btn.disabled = true;
+  try {
+    const fileName = "combos_" + todayDateStr().split(".").reverse().join("-") + "_" + nowTimeStr() + ".txt";
+    const file = new File([content], fileName, { type: "text/plain" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: fileName });
+        return;
+      } catch(e) {
+        if (e && e.name === "AbortError") return;
+        /* share failed for some other reason — fall through to normal download */
+      }
     }
-  }
 
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } finally {
+    downloadInProgress = false;
+    btn.disabled = false;
+  }
 }
 
 document.getElementById("downloadTxtBtn").addEventListener("click", () => {
