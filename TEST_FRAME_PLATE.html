@@ -408,6 +408,9 @@
     margin: 0 !important;
     z-index: 999;
   }
+  .stage.fs-mode.fs-contain {
+    background-size: contain;
+  }
 
   .main-layout {
     display: flex;
@@ -454,17 +457,9 @@
         <div id="fsActionsWrap" style="display:none; position:absolute; top:14px; right:14px; z-index:20; flex-direction:column; align-items:flex-end; gap:57px;">
           <button id="closeFullscreenBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
           <button id="addToListFsBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">＋ Добавить</button>
+          <button id="toggleFitBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">⛶ Без обрезки</button>
         </div>
         <div class="fs-color-controls">
-          <div class="fs-item">
-            <button class="fs-rect" id="bgFsRect" type="button"></button>
-            <div class="fs-label halo-text">Плашка</div>
-            <div class="fs-panel" id="bgFsPanel">
-              <select id="bgFsSelect"></select>
-              <div class="swatch-row" id="bgFsSwatches"></div>
-              <div class="rainbow-wrap" id="bgFsCustomWrap" style="display:none;"><input type="color" id="bgCustomColorFS"></div>
-            </div>
-          </div>
           <div class="fs-item">
             <button class="fs-rect" id="fgFsRect" type="button"></button>
             <div class="fs-label halo-text">Шрифт</div>
@@ -472,6 +467,15 @@
               <select id="fgFsSelect"></select>
               <div class="swatch-row" id="fgFsSwatches"></div>
               <div class="rainbow-wrap" id="fgFsCustomWrap" style="display:none;"><input type="color" id="fgCustomColorFS"></div>
+            </div>
+          </div>
+          <div class="fs-item">
+            <button class="fs-rect" id="bgFsRect" type="button"></button>
+            <div class="fs-label halo-text">Плашка</div>
+            <div class="fs-panel" id="bgFsPanel">
+              <select id="bgFsSelect"></select>
+              <div class="swatch-row" id="bgFsSwatches"></div>
+              <div class="rainbow-wrap" id="bgFsCustomWrap" style="display:none;"><input type="color" id="bgCustomColorFS"></div>
             </div>
           </div>
         </div>
@@ -482,16 +486,6 @@
 
       <div class="controls">
         <div class="control-block">
-          <div class="control-label">Плашка</div>
-          <select id="bgFamilySelect"></select>
-          <div class="swatch-row" id="bgSwatches" style="margin-top:10px;"></div>
-          <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
-            <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
-            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
-          </div>
-          <button id="addToListBtn" class="btn" style="width:100%; margin-top:16px;">＋ Добавить в список</button>
-        </div>
-        <div class="control-block">
           <div class="control-label">Шрифт</div>
           <select id="fgFamilySelect"></select>
           <div class="swatch-row" id="fgSwatches" style="margin-top:10px;"></div>
@@ -499,6 +493,19 @@
             <div class="rainbow-wrap"><input type="color" id="fgCustomColor"></div>
             <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
           </div>
+        </div>
+        <div class="control-block">
+          <div class="control-label">Плашка</div>
+          <select id="bgFamilySelect"></select>
+          <div class="swatch-row" id="bgSwatches" style="margin-top:10px;"></div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
+            <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
+            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+          </div>
+        </div>
+
+        <div class="control-block full-width">
+          <button id="addToListBtn" class="btn" style="width:100%;">＋ Добавить в список</button>
         </div>
 
         <div class="control-block full-width">
@@ -591,9 +598,9 @@ const MAX_FRAMES = 5;
 const DEFAULT_TITLE = "Заголовок или подпись к видеосюжету";
 
 const SIZING_KEYS = ["titleFontScale", "subtitleFontScale", "plashkaScale", "plashkaOpacity", "plashkaPosX", "plashkaPosY"];
-const SIZING_DEFAULTS_VERSION = 2; // bump this whenever HARDCODED_SIZING_DEFAULTS below changes, to force-apply it once
+const SIZING_DEFAULTS_VERSION = 3; // bump this whenever HARDCODED_SIZING_DEFAULTS below changes, to force-apply it once
 const HARDCODED_SIZING_DEFAULTS = {
-  titleFontScale: 76, subtitleFontScale: 76, plashkaScale: 65, plashkaOpacity: 60,
+  titleFontScale: 76, subtitleFontScale: 76, plashkaScale: 50, plashkaOpacity: 60,
   plashkaPosX: 3, plashkaPosY: 3
 };
 
@@ -937,7 +944,7 @@ function updateStage(){
   const sub = document.getElementById("stageSub");
   if (f.plashkaEnabled) {
     const cr = contrastRatio(currentBgHex(), currentFgHex());
-    sub.textContent = bgLine + "  ·  " + fgLine + "  ·  Контр. " + cr.toFixed(1);
+    sub.textContent = fgLine + "  ·  " + bgLine + "  ·  Контр. " + cr.toFixed(1);
   } else {
     sub.textContent = fgLine;
   }
@@ -990,15 +997,24 @@ document.getElementById("stageTitle").addEventListener("input", (e) => {
 
 document.getElementById("openFullscreenBtn").addEventListener("click", () => {
   document.getElementById("stage").classList.add("fs-mode");
+  document.getElementById("stage").classList.remove("fs-contain");
+  document.getElementById("toggleFitBtn").textContent = "⛶ Без обрезки";
   document.getElementById("fsActionsWrap").style.display = "flex";
   document.body.style.overflow = "hidden";
   setTimeout(applySizes, 50);
 });
 document.getElementById("closeFullscreenBtn").addEventListener("click", () => {
   document.getElementById("stage").classList.remove("fs-mode");
+  document.getElementById("stage").classList.remove("fs-contain");
   document.getElementById("fsActionsWrap").style.display = "none";
   document.body.style.overflow = "";
   setTimeout(applySizes, 50);
+});
+document.getElementById("toggleFitBtn").addEventListener("click", () => {
+  const stage = document.getElementById("stage");
+  const btn = document.getElementById("toggleFitBtn");
+  const isContain = stage.classList.toggle("fs-contain");
+  btn.textContent = isContain ? "⛶ С обрезкой" : "⛶ Без обрезки";
 });
 
 function copyText(text){
@@ -1022,7 +1038,7 @@ function comboString(){
   const fgLine = fgLabel();
   const bgLine = bgLabel();
   let out = f.plashkaEnabled
-    ? ("Плашка: " + bgLine + "\nШрифт: " + fgLine)
+    ? ("Шрифт: " + fgLine + "\nПлашка: " + bgLine)
     : ("Шрифт: " + fgLine);
   if (isUsingRealFrame() && f.fileName) out += "\nКадр: " + f.fileName;
   return out;
@@ -1036,12 +1052,20 @@ document.getElementById("copyComboBtn").addEventListener("click", () => {
   copyText(comboString());
   flashBtn(document.getElementById("copyComboBtn"), "Скопировано ✓");
 });
-function addComboToList(triggerBtn){
-  const area = document.getElementById("comboListArea");
-  const sep = area.value.trim().length ? "\n\n---\n\n" : "";
-  area.value = area.value + sep + comboString();
-  state.comboList = area.value;
+function colorValueEquals(a, b){
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.hex === b.hex && a.family === b.family && a.index === b.index;
+}
+function findDuplicateCombo(fileName, plate, font){
+  return state.savedCombos.some(c =>
+    c.fileName === fileName &&
+    colorValueEquals(c.plate, plate) &&
+    colorValueEquals(c.font, font)
+  );
+}
 
+function addComboToList(triggerBtn){
   const f = activeFrame();
 
   let plate = null;
@@ -1064,8 +1088,19 @@ function addComboToList(triggerBtn){
     font = { hex: currentFgHex(), family: f.fgFamily, index: idx + 1 };
   }
 
+  const fileNameForCombo = f.fileName || "Без кадра";
+  if (findDuplicateCombo(fileNameForCombo, plate, font)) {
+    flashBtn(triggerBtn, "Уже в списке");
+    return;
+  }
+
+  const area = document.getElementById("comboListArea");
+  const sep = area.value.trim().length ? "\n\n---\n\n" : "";
+  area.value = area.value + sep + comboString();
+  state.comboList = area.value;
+
   state.savedCombos.push({
-    fileName: f.fileName || "Без кадра",
+    fileName: fileNameForCombo,
     dateStr: todayDateStr(),
     plate: plate,
     font: font
@@ -1127,10 +1162,8 @@ function formatCombosTxt(){
   return groups.map(g => {
     const header = g.fileName + ", " + g.dateStr;
     const lines = g.items.map(c => {
-      const fontPart = "Font - " + hexWithFamily(c.font);
-      return c.plate
-        ? ("Plate - " + hexWithFamily(c.plate) + ", " + fontPart)
-        : fontPart;
+      const plateFragment = c.plate ? (", Plate - " + hexWithFamily(c.plate)) : "";
+      return "Font - " + hexWithFamily(c.font) + plateFragment;
     });
     return header + "\n\n" + lines.join("\n");
   }).join("\n\n");
