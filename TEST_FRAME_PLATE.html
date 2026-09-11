@@ -72,7 +72,7 @@
   }
   .stage.fs-mode .stage-sub {
     top: auto;
-    bottom: 0%;
+    bottom: 0.3%;
   }
 
   /* ---------- LEFT PANEL (frames) ---------- */
@@ -590,8 +590,10 @@ const STORAGE_KEY = "paletteToolSettings_v2";
 const MAX_FRAMES = 5;
 const DEFAULT_TITLE = "Заголовок или подпись к видеосюжету";
 
+const SIZING_KEYS = ["titleFontScale", "subtitleFontScale", "plashkaScale", "plashkaOpacity", "plashkaPosX", "plashkaPosY"];
+const SIZING_DEFAULTS_VERSION = 2; // bump this whenever HARDCODED_SIZING_DEFAULTS below changes, to force-apply it once
 const HARDCODED_SIZING_DEFAULTS = {
-  titleFontScale: 48, subtitleFontScale: 48, plashkaScale: 100, plashkaOpacity: 60,
+  titleFontScale: 76, subtitleFontScale: 76, plashkaScale: 65, plashkaOpacity: 60,
   plashkaPosX: 3, plashkaPosY: 3
 };
 
@@ -617,7 +619,7 @@ function defaultFrameSettings(fileName, dataURL){
 function loadState(){
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null };
+    if (!raw) return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null, sizingDefaultsVersion: null };
     const parsed = JSON.parse(raw);
     return {
       frames: Array.isArray(parsed.frames) ? parsed.frames : [],
@@ -625,10 +627,11 @@ function loadState(){
       comboList: parsed.comboList || "",
       savedCombos: (Array.isArray(parsed.savedCombos) ? parsed.savedCombos : []).map(normalizeSavedCombo),
       placeholderSettings: parsed.placeholderSettings || null,
-      lastSizing: parsed.lastSizing || null
+      lastSizing: parsed.lastSizing || null,
+      sizingDefaultsVersion: parsed.sizingDefaultsVersion || null
     };
   } catch(e){
-    return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null };
+    return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null, sizingDefaultsVersion: null };
   }
 }
 function saveState(){
@@ -639,12 +642,23 @@ function saveState(){
       comboList: state.comboList,
       savedCombos: state.savedCombos,
       placeholderSettings: state.placeholderSettings,
-      lastSizing: state.lastSizing
+      lastSizing: state.lastSizing,
+      sizingDefaultsVersion: state.sizingDefaultsVersion
     }));
   } catch(e){ /* quota exceeded etc */ }
 }
 
 let state = loadState();
+// Force-apply a new hardcoded sizing default exactly once when it changes (see
+// SIZING_DEFAULTS_VERSION above). Only touches the "what a NEW/placeholder frame
+// starts at" values — never touches sizing already saved on existing photo frames.
+if (state.sizingDefaultsVersion !== SIZING_DEFAULTS_VERSION) {
+  state.lastSizing = null;
+  if (state.placeholderSettings) {
+    SIZING_KEYS.forEach(k => { state.placeholderSettings[k] = HARDCODED_SIZING_DEFAULTS[k]; });
+  }
+  state.sizingDefaultsVersion = SIZING_DEFAULTS_VERSION;
+}
 // Settings used when no real frame is uploaded/selected (the placeholder image).
 // These must be persisted too, or every visit without an active frame reset them to defaults.
 if (!state.placeholderSettings) {
@@ -939,7 +953,6 @@ function updateStage(){
   renderGallery();
 }
 
-const SIZING_KEYS = ["titleFontScale", "subtitleFontScale", "plashkaScale", "plashkaOpacity", "plashkaPosX", "plashkaPosY"];
 function updateLastSizing(){
   const f = activeFrame();
   const snapshot = {};
@@ -1123,6 +1136,20 @@ function formatCombosTxt(){
   }).join("\n\n");
 }
 
+function outputTxtFileName(){
+  // Name the output txt after the currently loaded photo's file name, keeping
+  // only the part before its first underscore (e.g. "kadr1_raw.jpg" -> "kadr1.txt").
+  const f = activeFrame();
+  const raw = f.fileName;
+  if (raw) {
+    const noExt = raw.replace(/\.[a-zA-Z0-9]+$/, "");
+    const base = noExt.split("_")[0];
+    if (base) return base + ".txt";
+  }
+  // Fallback (no photo loaded, e.g. working on the placeholder) — date/time based name.
+  return "combos_" + todayDateStr().split(".").reverse().join("-") + "_" + nowTimeStr() + ".txt";
+}
+
 let downloadInProgress = false;
 async function downloadCombosTxt(){
   if (downloadInProgress) return;
@@ -1133,7 +1160,7 @@ async function downloadCombosTxt(){
   const btn = document.getElementById("downloadTxtBtn");
   btn.disabled = true;
   try {
-    const fileName = "combos_" + todayDateStr().split(".").reverse().join("-") + "_" + nowTimeStr() + ".txt";
+    const fileName = outputTxtFileName();
     const file = new File([content], fileName, { type: "text/plain" });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
