@@ -1360,6 +1360,16 @@ syncFgUI();
 updateStage();
 
 /* ---------- reference grid ---------- */
+function namesByHue(obj){
+  return Object.keys(obj).sort((a, b) => {
+    const ha = obj[a].hue, hb = obj[b].hue;
+    if (ha === null && hb === null) return 0;
+    if (ha === null) return 1;
+    if (hb === null) return -1;
+    return ha - hb;
+  });
+}
+
 function buildReference(){
   const wrap = document.getElementById("allFamilies");
 
@@ -1369,7 +1379,7 @@ function buildReference(){
   textHeader.textContent = "Текстовые семейства";
   wrap.appendChild(textHeader);
 
-  Object.keys(DATA.text).forEach(name => {
+  namesByHue(DATA.text).forEach(name => {
     wrap.appendChild(familyBlock(name, DATA.text[name]));
   });
 
@@ -1379,7 +1389,7 @@ function buildReference(){
   bgHeader.textContent = "Фоновые семейства (плашки)";
   wrap.appendChild(bgHeader);
 
-  Object.keys(DATA.bg).forEach(name => {
+  namesByHue(DATA.bg).forEach(name => {
     wrap.appendChild(familyBlock(name, DATA.bg[name]));
   });
 }
