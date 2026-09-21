@@ -268,6 +268,20 @@
   .rainbow-wrap input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
   .rainbow-wrap input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
 
+  .fs-counter {
+    display: none;
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    font-size: 14px;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .stage.fs-mode .fs-counter { display: block; }
+
   .fs-color-controls {
     display: none;
     position: absolute;
@@ -457,6 +471,7 @@
           <button id="closeFullscreenBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
           <button id="addToListFsBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">＋ Добавить</button>
         </div>
+        <div id="fsCounter" class="fs-counter halo-text"></div>
         <div class="fs-color-controls">
           <div class="fs-item">
             <button class="fs-rect" id="fgFsRect" type="button"></button>
@@ -553,15 +568,15 @@ const DATA = {
     "BEIGE": { hue:40, list:["F6F1E5:241","F3EBDC:236","F0E6D3:231","EDE1C9:226","EADCC0:221","E7D7B7:216","E4D2AE:211","E1CDA4:206","DEC79B:201","DBC292:196"] },
     "BLUE": { hue:240, list:["DADAFF:221","D5D5FF:216","D0D0FF:211","CACAFF:206","C5C5FF:201","BFBFFF:196","BABAFF:191","B5B5FF:186","AFAFFF:181","AAAAFF:176"] },
     "CYAN": { hue:180, list:["F0FFFF:252","DEFFFF:248","CCFFFF:244","BAFFFF:240","A8FFFF:236","96FFFF:233","84FFFF:229","72FFFF:225","60FFFF:221","4EFFFF:217"] },
-    "GREEN": { hue:120, list:["F0FFF0:251","DFFFDF:246","CEFFCE:241","BCFFBC:236","ABFFAB:231","99FF99:226","88FF88:221","76FF76:216","65FF65:211","53FF53:206"] },
+    "GREEN": { hue:120, list:["D4FFD4:243","CAFFCA:240","C1FFC1:237","B8FFB8:235","AEFFAE:232","A5FFA5:229","9CFF9C:227","92FF92:224","89FF89:221","80FF80:219"] },
     "HERB": { hue:91, list:["F4FFE9:251","E5FFCE:246","D7FFB2:241","D3FAAF:236","CEF4AB:231","CAEFA7:226","C6EAA4:221","C1E4A0:216","BDDF9C:211","B8DA99:206"] },
     "MINT": { hue:155, list:["EFFFF8:251","DAFFF0:246","C5FFE7:241","B1FFDE:236","9CFFD6:231","88FFCD:226","73FFC5:221","5EFFBC:216","4AFFB3:211","35FFAB:206"] },
     "OLIVE": { hue:70, list:["EAEFD4:236","E5EBC9:231","E0E6BE:226","DAE2B3:221","D5DEA8:216","CFDA9C:211","CAD591:206","C5D186:201","BFCD7B:196","BAC970:191"] },
     "ORANGE": { hue:39, list:["FFF0D4:241","FFEAC4:236","FFE5B5:231","FFDFA6:226","FFDA96:221","FFD587:216","FFCF77:211","FFCA68:206","FFC459:201","FFBF49:196"] },
     "RED": { hue:0, list:["FFEDED:241","FFE7E7:236","FFE1E1:231","FFDADA:226","FFD4D4:221","FFCDCD:216","FFC7C7:211","FFC1C1:206","FFBABA:201","FFB4B4:196"] },
     "ROSE": { hue:335, list:["FFF3F8:246","FFEDF4:241","FFE6F0:236","FFDFED:231","FFD9E9:226","FFD2E5:221","FFCCE1:216","FFC5DD:211","FFBED9:206","FFB8D5:201"] },
-    "SALAT": { hue:90, list:["F4FFE9:251","E6FFCD:246","D8FFB1:241","CAFF95:236","BCFF79:231","AEFF5D:226","A0FF41:221","92FF25:216","84FF09:211","6FFF00:206"] },
-    "YELLOW": { hue:60, list:["FFFFE3:253","FFFFC8:251","FFFFAC:249","FFFF90:247","FFFF74:245","FFFF59:243","FFFF3D:241","FFFF21:239","FFFF00:237"] },
+    "SALAT": { hue:90, list:["EAFFD4:247","E4FFC8:245","DEFFBC:243","D8FFB0:241","D2FFA4:239","CCFF98:237","C6FF8C:235","C0FF80:232","BAFF74:230","B4FF69:228"] },
+    "YELLOW": { hue:60, list:["FFFFD4:252","FFFFC8:251","FFFFBC:250","FFFFB0:249","FFFFA4:248","FFFF98:248","FFFF8C:247","FFFF80:246","FFFF74:245","FFFF69:244"] },
     "YELLOW_W": { hue:50, list:["FCF7DC:246","FBF2C9:241","F9EEB5:236","F7E9A2:231","F6E58E:226","F4E07B:221","F3DB67:216","F1D754:211","F0D240:206","EECE2D:201"] },
   },
   bg: {
@@ -570,12 +585,15 @@ const DATA = {
     "Blue": { hue:225, list:["001143:17","001656:22","001B6A:27","001F7A:31","00248E:36","0029A2:41","002DB2:45"] },
     "Bordeaux": { hue:345, list:["410010:15","570016:20","6C001B:25","820021:30","980026:35","AD002B:40","C30031:45"] },
     "Brown": { hue:27, list:["1B1007:18","221408:22","29180A:27","311C0C:31","39200E:36","3F2510:41","462912:46"] },
+    "Brown_2": { hue:20, list:["180F0B:17","20140E:22","271811:27","2C1C14:31","342117:36","3B251A:41","422A1E:46"] },
     "Cyan": { hue:193, list:["00161C:18","001C24:23","00212C:27","002732:32","002D3A:36","003342:41","00394A:46"] },
     "Graphite": { hue:null, list:["111111:17","161616:22","1A1A1A:26","1F1F1F:31","242424:36","292929:41","2E2E2E:46"] },
     "Grass": { hue:91, list:["0C1405:17","101906:22","131F08:27","172509:32","1A2B0A:37","1E310C:42","21360D:47"] },
     "Green": { hue:120, list:["001500:15","001C00:20","002300:25","002A00:30","003100:35","003800:40","004000:46"] },
+    "Indigo": { hue:255, list:["1E0078:15","2800A0:20","3200C7:25","3C00EF:30"] },
     "Olive": { hue:63, list:["121300:17","171800:22","1C1D00:27","212200:31","272700:36","2C2C00:41","313100:45"] },
     "Orange": { hue:29, list:["1F0F00:17","271300:22","301800:27","381C00:32","3F2000:36","472400:41","512800:46"] },
+    "Plum": { hue:310, list:["37002E:15","49003D:20","5B004C:25","6E005C:30","80006B:35","93007A:40","A50089:45"] },
     "Purple": { hue:280, list:["350050:17","440066:22","53007C:27","620092:31","7000A9:36","7F00BF:41","8E00D5:46"] },
     "Red": { hue:0, list:["500000:17","670000:22","7D0000:27","930000:31","AA0000:36","C00000:41","D70000:46"] },
     "Rose": { hue:335, list:["3E001A:15","520022:20","67002B:25","7C0034:30","90003C:35","A50045:40","B9004D:45"] },
@@ -960,6 +978,7 @@ function updateStage(){
   document.getElementById("plashkaPosYNum").value = f.plashkaPosY;
 
   renderGallery();
+  updateFsNav();
 }
 
 function updateLastSizing(){
@@ -1009,6 +1028,54 @@ document.getElementById("closeFullscreenBtn").addEventListener("click", () => {
   document.body.style.overflow = "";
   setTimeout(applySizes, 50);
 });
+
+/* ---------- flipping frames in fullscreen mode ---------- */
+function isFsMode(){
+  return document.getElementById("stage").classList.contains("fs-mode");
+}
+function updateFsNav(){
+  const n = state.frames.length;
+  const i = state.frames.findIndex(fr => fr.id === state.activeFrameId);
+  document.getElementById("fsCounter").textContent = (n > 0 && i >= 0) ? (i + 1) + " / " + n : "";
+}
+function stepFrame(dir){
+  const n = state.frames.length;
+  if (n < 2) return;
+  let i = state.frames.findIndex(fr => fr.id === state.activeFrameId);
+  if (i < 0) i = 0;
+  i = (i + dir + n) % n;
+  state.activeFrameId = state.frames[i].id;
+  document.getElementById("bgFsPanel").classList.remove("open");
+  document.getElementById("fgFsPanel").classList.remove("open");
+  syncBgUI(); syncFgUI(); updateStage(); saveState();
+}
+document.addEventListener("keydown", (e) => {
+  if (!isFsMode()) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+  if (e.key === "ArrowLeft")  { e.preventDefault(); stepFrame(-1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); stepFrame(1); }
+});
+(function(){
+  const stage = document.getElementById("stage");
+  let sx = 0, sy = 0, st = 0, tracking = false;
+  stage.addEventListener("touchstart", (e) => {
+    tracking = false;
+    if (!isFsMode() || e.touches.length !== 1) return;
+    if (e.target.closest("#stageTitle, .fs-color-controls, #fsActionsWrap")) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+    tracking = true;
+  }, { passive: true });
+  stage.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy) && Date.now() - st < 800) {
+      stepFrame(dx < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+})();
 
 function copyText(text){
   if (navigator.clipboard && navigator.clipboard.writeText) {
