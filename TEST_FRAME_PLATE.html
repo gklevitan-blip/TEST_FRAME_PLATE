@@ -301,7 +301,8 @@
     width: 46px;
     height: 32px;
     border-radius: 6px;
-    border: 2px solid rgba(255,255,255,0.55);
+    border: 2px solid #8a8a8a;
+    background-clip: padding-box;
     cursor: pointer;
     display: block;
     position: relative;
@@ -310,17 +311,16 @@
   .fs-rect::after {
     content: "";
     position: absolute;
-    top: 0;
-    right: 0;
+    top: 2px;
+    right: 2px;
     width: 0;
     height: 0;
     border-style: solid;
-    border-width: 0 16px 16px 0;
+    border-width: 0 var(--corner-size, 14px) var(--corner-size, 14px) 0;
     border-color: transparent var(--corner-color, #fff) transparent transparent;
-    filter: drop-shadow(0 0 1.5px var(--corner-halo, rgba(0,0,0,0.9)));
   }
-  #fgFsRect { --corner-color: #000000; --corner-halo: rgba(255,255,255,0.9); }
-  #bgFsRect { --corner-color: #ffffff; --corner-halo: rgba(0,0,0,0.9); }
+  #fgFsRect { --corner-color: #000000; }
+  #bgFsRect { --corner-color: #ffffff; --corner-size: 12px; }
   .fs-label {
     font-size: 11px;
     color: #fff;
