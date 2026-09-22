@@ -316,8 +316,12 @@
     width: 0;
     height: 0;
     border-style: solid;
-    border-width: 0 var(--corner-size, 14px) var(--corner-size, 14px) 0;
+    border-width: 0 0 0 0;
     border-color: transparent var(--corner-color, #fff) transparent transparent;
+    transition: border-width 0.1s;
+  }
+  .fs-rect.active::after {
+    border-width: 0 var(--corner-size, 14px) var(--corner-size, 14px) 0;
   }
   #fgFsRect { --corner-color: #000000; }
   #bgFsRect { --corner-color: #ffffff; --corner-size: 12px; }
@@ -1064,6 +1068,8 @@ function stepFrame(dir){
   state.activeFrameId = state.frames[i].id;
   document.getElementById("bgFsPanel").classList.remove("open");
   document.getElementById("fgFsPanel").classList.remove("open");
+  document.getElementById("bgFsRect").classList.remove("active");
+  document.getElementById("fgFsRect").classList.remove("active");
   syncBgUI(); syncFgUI(); updateStage(); saveState();
 }
 document.addEventListener("keydown", (e) => {
@@ -1416,9 +1422,13 @@ document.getElementById("fgCustomColorFS").addEventListener("input", (e) => setF
 function toggleFsPanel(panelId, otherPanelId){
   const panel = document.getElementById(panelId);
   const other = document.getElementById(otherPanelId);
+  const rect = document.getElementById(panelId.replace("Panel", "Rect"));
+  const otherRect = document.getElementById(otherPanelId.replace("Panel", "Rect"));
   const willOpen = !panel.classList.contains("open");
   other.classList.remove("open");
+  otherRect.classList.remove("active");
   panel.classList.toggle("open", willOpen);
+  rect.classList.toggle("active", willOpen);
 }
 document.getElementById("bgFsRect").addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1433,6 +1443,8 @@ document.getElementById("fgFsPanel").addEventListener("click", (e) => e.stopProp
 document.getElementById("stage").addEventListener("click", () => {
   document.getElementById("bgFsPanel").classList.remove("open");
   document.getElementById("fgFsPanel").classList.remove("open");
+  document.getElementById("bgFsRect").classList.remove("active");
+  document.getElementById("fgFsRect").classList.remove("active");
 });
 
 window.addEventListener('resize', () => { applySizes(); });
