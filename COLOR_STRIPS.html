@@ -2,18 +2,22 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Полосы">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141517">
 <title>Полосы: быстрый просмотр</title>
 <style>
   :root{--bg:#141517;--panel:#1d1f22;--line:#33363b;--ink:#ececec;--dim:#9aa0a6}
-  body{margin:0;padding:14px 14px 70px;background:var(--bg);color:var(--ink);font:15px -apple-system,system-ui,sans-serif}
+  body{margin:0;padding:max(14px,env(safe-area-inset-top)) 14px 70px;background:var(--bg);color:var(--ink);font:15px -apple-system,system-ui,sans-serif}
   textarea{width:100%;box-sizing:border-box;height:150px;margin-top:8px;background:var(--panel);color:var(--ink);
     border:1px solid var(--line);border-radius:10px;padding:10px;font:13px ui-monospace,Menlo,monospace}
   button{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:14px;margin-top:8px}
   .bar{display:flex;flex-wrap:wrap;gap:8px}
   .btn{display:inline-block;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:14px}
   .bar button{margin-top:0}
-  #go{background:#2a5bd7;border-color:#2a5bd7}
   #sel{color:var(--dim);font-size:13px;margin:10px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   details{margin-top:8px;color:var(--dim);font-size:13px}
   h2{font-size:16px;margin:26px 0 0}
@@ -28,9 +32,8 @@
 </head>
 <body>
 <div class="bar">
-  <label class="btn">Обзор: файлы<input id="fFiles" type="file" multiple accept=".txt,text/plain" hidden></label>
-  <label class="btn">Обзор: папка<input id="fDir" type="file" webkitdirectory multiple hidden></label>
-  <button id="go">Смотреть</button>
+  <label class="btn">Добавить файлы<input id="fFiles" type="file" multiple accept=".txt,text/plain" hidden></label>
+  <label class="btn">Добавить папку<input id="fDir" type="file" webkitdirectory multiple hidden></label>
   <button id="clr">Очистить</button>
 </div>
 <div id="sel">Ничего не выбрано</div>
@@ -124,10 +127,13 @@ function save(){
 async function pick(e){
   const arr = [...e.target.files].filter(f => /\.txt$/i.test(f.name))
     .sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true }));
-  files = [];
-  for (const f of arr) files.push({ name: f.name.replace(/\.txt$/i, ''), text: await f.text() });
+  for (const f of arr) {
+    const item = { name: f.name.replace(/\.txt$/i, ''), text: await f.text() };
+    const k = files.findIndex(x => x.name === item.name);
+    if (k >= 0) files[k] = item; else files.push(item);
+  }
   e.target.value = '';
-  showSel(); save();
+  showSel(); render();
 }
 try {
   $('inp').value = localStorage.getItem('strips_in') || '';
@@ -135,7 +141,7 @@ try {
 } catch (e) {}
 $('fFiles').onchange = pick;
 $('fDir').onchange = pick;
-$('go').onclick = render;
+$('inp').oninput = render;
 $('clr').onclick = () => { files = []; $('inp').value = ''; showSel(); render(); };
 showSel(); render();
 </script>
