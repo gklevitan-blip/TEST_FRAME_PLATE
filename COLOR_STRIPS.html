@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Полосы: быстрый просмотр</title>
+<style>
+  :root{--bg:#141517;--panel:#1d1f22;--line:#33363b;--ink:#ececec;--dim:#9aa0a6}
+  body{margin:0;padding:14px 14px 70px;background:var(--bg);color:var(--ink);font:15px -apple-system,system-ui,sans-serif}
+  textarea{width:100%;box-sizing:border-box;height:150px;margin-top:8px;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:10px;padding:10px;font:13px ui-monospace,Menlo,monospace}
+  button{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:14px;margin-top:8px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px}
+  .btn{display:inline-block;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:14px}
+  .bar button{margin-top:0}
+  #go{background:#2a5bd7;border-color:#2a5bd7}
+  #sel{color:var(--dim);font-size:13px;margin:10px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  details{margin-top:8px;color:var(--dim);font-size:13px}
+  h2{font-size:16px;margin:26px 0 0}
+  .fam{margin:16px 0}
+  .name{font-weight:600;margin-bottom:6px}
+  .name span{color:var(--dim);font-weight:400;font-size:12px;margin-left:8px}
+  .strip{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .chip{flex:1;min-width:0;height:64px}
+  #info{position:fixed;left:0;right:0;bottom:0;padding:14px;background:#000;color:#fff;
+    font:14px ui-monospace,Menlo,monospace;text-align:center}
+</style>
+</head>
+<body>
+<div class="bar">
+  <label class="btn">Обзор: файлы<input id="fFiles" type="file" multiple accept=".txt,text/plain" hidden></label>
+  <label class="btn">Обзор: папка<input id="fDir" type="file" webkitdirectory multiple hidden></label>
+  <button id="go">Смотреть</button>
+  <button id="clr">Очистить</button>
+</div>
+<div id="sel">Ничего не выбрано</div>
+<details><summary>Или вставить текстом</summary>
+<textarea id="inp" spellcheck="false" placeholder="Название набора&#10;F4FFE9  L=251&#10;E6FFCD  L=246&#10;...&#10;&#10;Следующий набор (после пустой строки)"></textarea>
+</details>
+<div id="out"></div>
+<div id="info">Нажми на плашку</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const hexRe = /#?\b([0-9A-Fa-f]{6})\b/;
+const rgb = h => [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16));
+const luma = h => { const [r, g, b] = rgb(h); return 0.2126*r + 0.7152*g + 0.0722*b; };
+
+function parse(text, base){
+  const fams = []; let cur = null, n = 0;
+  text.split(/\r?\n/).forEach(line => {
+    const t = line.trim();
+    if (!t) { cur = null; return; }
+    const m = t.match(hexRe);
+    if (!m) { cur = { name: t.replace(/[:：]\s*$/, ''), list: [] }; fams.push(cur); return; }
+    if (!cur) { n++; cur = { name: (base || 'Набор') + (n > 1 ? ' ' + n : ''), list: [] }; fams.push(cur); }
+    const hex = m[1].toUpperCase();
+    const lm = t.match(/L\s*=\s*(\d+)/i) || t.match(/:(\d+)\s*$/);
+    cur.list.push({ hex, L: lm ? +lm[1] : Math.round(luma(hex)) });
+  });
+  return fams.filter(f => f.list.length);
+}
+
+function hueOf(list){
+  let best = null;
+  list.forEach(c => {
+    const [r, g, b] = rgb(c.hex), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    const s = mx ? d / mx : 0;
+    if (!best || s > best.s) {
+      let h = 0;
+      if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      best = { s, h: (h * 60 + 360) % 360 };
+    }
+  });
+  return best.s < 0.05 ? null : Math.round(best.h);
+}
+
+/* порядок как в BigTest: сначала шрифты (светлые), потом плашки (тёмные); внутри по оттенку */
+function group(fams){
+  fams.forEach((f, i) => {
+    f.i = i; f.hue = hueOf(f.list);
+    f.avg = f.list.reduce((s, c) => s + luma(c.hex), 0) / f.list.length;
+  });
+  const cmp = (a, b) => a.hue === b.hue ? a.i - b.i : a.hue === null ? 1 : b.hue === null ? -1 : a.hue - b.hue;
+  return { text: fams.filter(f => f.avg >= 120).sort(cmp), bg: fams.filter(f => f.avg < 120).sort(cmp) };
+}
+
+function strip(f){
+  const d = document.createElement('div'); d.className = 'fam';
+  const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = f.name;
+  const sp = document.createElement('span'); sp.textContent = f.hue === null ? 'нейтральный' : 'hue ' + f.hue + '°';
+  nm.appendChild(sp);
+  const st = document.createElement('div'); st.className = 'strip';
+  f.list.forEach(c => {
+    const e = document.createElement('div'); e.className = 'chip'; e.style.background = '#' + c.hex;
+    e.onclick = () => { $('info').textContent = f.name + '   ' + c.hex + '   L=' + c.L; };
+    st.appendChild(e);
+  });
+  d.appendChild(nm); d.appendChild(st);
+  return d;
+}
+
+function render(){
+  const out = $('out'); out.innerHTML = '';
+  const all = [];
+  files.forEach(f => parse(f.text, f.name).forEach(x => all.push(x)));
+  parse($('inp').value, 'Набор').forEach(x => all.push(x));
+  const g = group(all);
+  [['Текстовые семейства', g.text], ['Фоновые семейства (плашки)', g.bg]].forEach(([title, arr]) => {
+    if (!arr.length) return;
+    const h = document.createElement('h2'); h.textContent = title; out.appendChild(h);
+    arr.forEach(f => out.appendChild(strip(f)));
+  });
+  save();
+}
+
+let files = [];
+function showSel(){
+  $('sel').textContent = files.length ? 'Файлов: ' + files.length + ' — ' + files.map(f => f.name).join(', ') : 'Ничего не выбрано';
+}
+function save(){
+  try { localStorage.setItem('strips_in', $('inp').value); localStorage.setItem('strips_files', JSON.stringify(files)); } catch (e) {}
+}
+async function pick(e){
+  const arr = [...e.target.files].filter(f => /\.txt$/i.test(f.name))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true }));
+  files = [];
+  for (const f of arr) files.push({ name: f.name.replace(/\.txt$/i, ''), text: await f.text() });
+  e.target.value = '';
+  showSel(); save();
+}
+try {
+  $('inp').value = localStorage.getItem('strips_in') || '';
+  files = JSON.parse(localStorage.getItem('strips_files') || '[]');
+} catch (e) {}
+$('fFiles').onchange = pick;
+$('fDir').onchange = pick;
+$('go').onclick = render;
+$('clr').onclick = () => { files = []; $('inp').value = ''; showSel(); render(); };
+showSel(); render();
+</script>
+</body>
+</html>
