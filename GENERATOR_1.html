@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/png" href="icon_palette.png">
+<title>Генератор обойм</title>
+<style>
+  :root{
+    --bg:#141517; --panel:#1d1f22; --line:#33363b; --ink:#ececec; --dim:#9aa0a6;
+    --accent:#4f8cff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:18px 16px 60px; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  .hidden{display:none !important;}
+
+  h1{font-size:19px; margin:0 0 16px;}
+  h2{font-size:14px; margin:0 0 10px; color:var(--dim); font-weight:600;}
+
+  label{display:block; font-size:12px; color:var(--dim); margin:10px 0 4px;}
+  input{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+    font-size:14px; background:var(--panel); color:var(--ink);
+  }
+  .row{display:flex; gap:10px; flex-wrap:wrap;}
+  .row > div{flex:1; min-width:100px;}
+  button{
+    padding:9px 14px; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel); color:var(--ink); font-size:13px; font-weight:600; cursor:pointer;
+  }
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  button:active:not(:disabled){opacity:.8;}
+  .btn-row{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px;
+  }
+
+  #selectScreen{display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start;}
+  #leftCol{flex:1 1 340px; max-width:400px;}
+  #rightCol{flex:2 1 480px; min-width:280px;}
+  #compareBlock{margin-top:18px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th, td{padding:6px 8px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap;}
+  th{color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase;}
+  .swatch{
+    display:inline-block; width:16px; height:16px; border-radius:4px;
+    border:1px solid rgba(255,255,255,.15); vertical-align:middle;
+  }
+  .result{margin-top:12px; padding:12px; background:#22262c; border-radius:8px; font-size:13px;}
+  .result b{font-size:15px;}
+  .hint{font-size:12px; color:var(--dim); margin-top:6px;}
+  code{background:#26292e; padding:1px 5px; border-radius:4px; font-size:12px;}
+  .empty-msg{color:var(--dim); font-size:13px;}
+
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; gap:10px; flex-wrap:wrap;}
+  .topbar .left-actions, .topbar .right-actions{display:flex; gap:8px; flex-wrap:wrap;}
+  .set-block{margin-bottom:24px;}
+  .set-header{
+    display:flex; align-items:center; gap:8px;
+    font-size:13px; color:#ccc; font-family:ui-monospace,Menlo,monospace; margin-bottom:6px;
+  }
+  .set-header input[type=checkbox]{width:16px; height:16px; margin:0;}
+  .strip{display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line);}
+  .strip > div{flex:1; min-width:0; height:64px;}
+</style>
+</head>
+<body>
+
+<div class="screen" id="selectScreen">
+  <div id="leftCol">
+    <h1>Выбор обоймы</h1>
+    <div class="panel">
+      <div class="row">
+        <div><label>Hue (°)</label><input type="number" id="genHue" value="40" min="0" max="360"></div>
+        <div><label>Старт L</label><input type="number" id="genStart" value="241"></div>
+      </div>
+      <div class="row">
+        <div><label>Шаг</label><input type="number" id="genStep" value="5" step="0.1"></div>
+        <div><label>Кол-во позиций</label><input type="number" id="genCount" value="20" min="1" max="60"></div>
+      </div>
+      <div class="btn-row">
+        <button class="primary" onclick="buildTable()">Построить ряд</button>
+        <button id="addBtn" onclick="addSet()" disabled>Добавить</button>
+        <button onclick="downloadCurrent()">Создать txt файл</button>
+        <button onclick="showResults()">Показать результаты</button>
+      </div>
+    </div>
+
+    <div id="compareBlock" class="panel">
+      <h2>Сверка по реальной яркости (CIE L*) — по желанию</h2>
+      <div class="row">
+        <div><label>Референс: Hue (°)</label><input type="number" id="refHue" value="40" min="0" max="360"></div>
+        <div><label>Референс: L (HSL)</label><input type="number" id="refL" value="161"></div>
+      </div>
+      <div class="row">
+        <div><label>Сравнить с Hue (°)</label><input type="number" id="targetHue" value="0" min="0" max="360"></div>
+      </div>
+      <div class="btn-row"><button onclick="matchHue()">Найти эквивалент</button></div>
+      <div id="matchOut"></div>
+    </div>
+  </div>
+
+  <div id="rightCol" class="panel">
+    <h2>Построенный ряд</h2>
+    <div id="genOut"><div class="empty-msg">Нажмите «Построить ряд».</div></div>
+  </div>
+</div>
+
+<div class="screen hidden" id="resultScreen">
+  <div class="topbar">
+    <div class="left-actions">
+      <button onclick="showSelect()">Вернуться к выбору</button>
+    </div>
+    <div class="right-actions">
+      <button onclick="deleteSelected()">Удалить</button>
+      <button onclick="clearAll()">Очистить</button>
+    </div>
+  </div>
+  <div id="setsContainer"></div>
+</div>
+
+<script>
+let sets = [];
+let nextId = 1;
+let lastRows = null;
+let lastHue = null;
+
+function srgbToLinear(c){
+  c = c/255;
+  return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+}
+function hlsToRgb(hueDeg, l, s){
+  const h = ((hueDeg%360)+360)%360/360;
+  function hue2rgb(p,q,t){
+    if(t<0) t+=1; if(t>1) t-=1;
+    if(t<1/6) return p+(q-p)*6*t;
+    if(t<1/2) return q;
+    if(t<2/3) return p+(q-p)*(2/3-t)*6;
+    return p;
+  }
+  let r,g,b;
+  if(s===0){ r=g=b=l; }
+  else{
+    const q = l<0.5 ? l*(1+s) : l+s-l*s;
+    const p = 2*l-q;
+    r = hue2rgb(p,q,h+1/3);
+    g = hue2rgb(p,q,h);
+    b = hue2rgb(p,q,h-1/3);
+  }
+  return [r*255, g*255, b*255];
+}
+function rgbToLstar255(r,g,b){
+  const rl=srgbToLinear(r), gl=srgbToLinear(g), bl=srgbToLinear(b);
+  const Y = rl*0.2126729 + gl*0.7151522 + bl*0.0721750;
+  const d = 6/29;
+  const fy = Y > d*d*d ? Math.cbrt(Y) : Y/(3*d*d)+4/29;
+  return (116*fy-16)*2.55;
+}
+function toHex(r,g,b){
+  const h = n => Math.round(Math.max(0,Math.min(255,n))).toString(16).toUpperCase().padStart(2,'0');
+  return h(r)+h(g)+h(b);
+}
+function pctOf(r,g,b){
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+  return Math.round((mx-mn)/255*100);
+}
+
+function currentInputs(){
+  return {
+    hue: parseFloat(document.getElementById('genHue').value),
+    start: parseFloat(document.getElementById('genStart').value),
+    step: parseFloat(document.getElementById('genStep').value),
+    count: parseInt(document.getElementById('genCount').value)
+  };
+}
+
+function buildRows(hue, start, step, count){
+  const rows = [];
+  for(let i=0;i<count;i++){
+    const L = Math.round(start - step*i);
+    if(L<0 || L>255) continue;
+    const [r,g,b] = hlsToRgb(hue, L/255, 1.0);
+    rows.push({hex: toHex(r,g,b), L, real: rgbToLstar255(r,g,b), pct: pctOf(r,g,b)});
+  }
+  return rows;
+}
+
+function buildTable(){
+  const {hue, start, step, count} = currentInputs();
+  lastRows = buildRows(hue, start, step, count);
+  lastHue = hue;
+
+  let html = '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>%</th></tr>';
+  lastRows.forEach(r => {
+    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.pct}%</td></tr>`;
+  });
+  html += '</table>';
+  document.getElementById('genOut').innerHTML = html;
+  document.getElementById('addBtn').disabled = false;
+}
+
+function rowsToText(rows){
+  return rows.map(r => `${r.hex}  L=${r.L}`).join('\n') + '\n';
+}
+function triggerDownload(filename, text){
+  const blob = new Blob([text], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function downloadCurrent(){
+  if(!lastRows){ buildTable(); }
+  triggerDownload(`HUE_${lastHue}.txt`, rowsToText(lastRows));
+}
+
+function addSet(){
+  if(!lastRows) return;
+  sets.push({id: nextId++, hue: lastHue, rows: lastRows, selected:false});
+  renderSets();
+  showResults();
+}
+
+function toggleSelect(id, checked){
+  const s = sets.find(s=>s.id===id);
+  if(s) s.selected = checked;
+}
+function deleteSelected(){
+  sets = sets.filter(s => !s.selected);
+  renderSets();
+}
+function clearAll(){
+  sets = [];
+  renderSets();
+}
+
+function renderSets(){
+  const container = document.getElementById('setsContainer');
+  if(!sets.length){
+    container.innerHTML = '<div class="empty-msg">Пока ничего не добавлено.</div>';
+    return;
+  }
+  container.innerHTML = sets.map((s) => {
+    const first = s.rows[0], last = s.rows[s.rows.length-1];
+    const header = `hue=${s.hue}, L ${first.L}-${last.L}, ${first.pct}-${last.pct}%`;
+    const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
+    return `
+      <div class="set-block">
+        <div class="set-header">
+          <input type="checkbox" ${s.selected?'checked':''} onchange="toggleSelect(${s.id}, this.checked)">
+          <span>${header}</span>
+        </div>
+        <div class="strip">${strip}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function showResults(){
+  document.getElementById('selectScreen').classList.add('hidden');
+  document.getElementById('resultScreen').classList.remove('hidden');
+}
+function showSelect(){
+  document.getElementById('resultScreen').classList.add('hidden');
+  document.getElementById('selectScreen').classList.remove('hidden');
+}
+
+function matchHue(){
+  const refHue = parseFloat(document.getElementById('refHue').value);
+  const refL = parseFloat(document.getElementById('refL').value);
+  const targetHue = parseFloat(document.getElementById('targetHue').value);
+  const out = document.getElementById('matchOut');
+  if([refHue,refL,targetHue].some(v=>isNaN(v))){
+    out.innerHTML = '<div class="hint">Заполните поля числами.</div>';
+    return;
+  }
+  const [rr,rg,rb] = hlsToRgb(refHue, refL/255, 1.0);
+  const refReal = rgbToLstar255(rr,rg,rb);
+  const refHex = toHex(rr,rg,rb);
+
+  let lo=0, hi=255, mid=127, R,G,B;
+  for(let i=0;i<60;i++){
+    mid = (lo+hi)/2;
+    [R,G,B] = hlsToRgb(targetHue, mid/255, 1.0);
+    const L2 = rgbToLstar255(R,G,B);
+    if(Math.abs(L2-refReal)<0.02) break;
+    if(L2<refReal) lo=mid; else hi=mid;
+  }
+  const targetL = Math.round(mid);
+  const [R2,G2,B2] = hlsToRgb(targetHue, targetL/255, 1.0);
+  const targetHex = toHex(R2,G2,B2);
+
+  out.innerHTML = `
+    <div class="result">
+      Референс: <span class="swatch" style="background:#${refHex}"></span> <code>${refHex}</code>
+      (hue ${refHue}°, L=${refL}) → реальный CIE L* = <b>${refReal.toFixed(1)}</b>
+      <div class="hint">Эквивалент для hue ${targetHue}°: naive HSL L ≈ <b>${targetL}</b>
+        &nbsp;<span class="swatch" style="background:#${targetHex}"></span> <code>${targetHex}</code>
+      </div>
+    </div>
+  `;
+}
+
+renderSets();
+</script>
+</body>
+</html>
