@@ -137,7 +137,6 @@
       <button onclick="showSelect()">Вернуться к выбору</button>
     </div>
     <div class="right-actions">
-      <button onclick="sortByHue()">Упорядочить</button>
       <button onclick="downloadSelectedTxt()">Создать txt файл</button>
       <button onclick="clearAll()">Очистить</button>
     </div>
@@ -304,6 +303,18 @@ function loadSets(){
   }
 }
 
+function compareSets(a, b){
+  if(a.hue !== b.hue) return a.hue - b.hue;
+  const aL = a.rows[a.rows.length-1].L;
+  const bL = b.rows[b.rows.length-1].L;
+  return aL - bL;
+}
+function insertSetSorted(newSet){
+  let idx = sets.findIndex(s => compareSets(newSet, s) < 0);
+  if(idx === -1) idx = sets.length;
+  sets.splice(idx, 0, newSet);
+}
+
 function addSet(){
   if(!lastRows) return;
   const sig = computeSignature(lastHue, lastMaxVal, lastRows);
@@ -311,7 +322,7 @@ function addSet(){
     showToast('Уже добавлено.');
     return;
   }
-  sets.push({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig});
   saveSets();
   renderSets();
   showResults();
@@ -328,11 +339,6 @@ function deleteOne(id){
 }
 function clearAll(){
   sets = [];
-  saveSets();
-  renderSets();
-}
-function sortByHue(){
-  sets.sort((a,b) => a.hue - b.hue);
   saveSets();
   renderSets();
 }
@@ -371,6 +377,7 @@ function showSelect(){
   lastHue = null;
   lastMaxVal = null;
   document.getElementById('addBtn').disabled = true;
+  document.getElementById('genMax').value = 255;
 }
 
 function matchHue(){
