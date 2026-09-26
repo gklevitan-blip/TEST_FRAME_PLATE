@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="icon" type="image/png" href="icon_palette.png">
+<link rel="icon" type="image/png" href="icon_generator.png">
+<link rel="apple-touch-icon" href="icon_generator.png">
+<meta name="theme-color" content="#141517">
 <title>Генератор обойм</title>
 <style>
   :root{
@@ -270,6 +272,9 @@ function downloadSelectedTxt(){
   const chosen = sets.filter(s => s.selected);
   if(!chosen.length) return;
   chosen.forEach(s => triggerDownload(`HUE_${s.hue}.txt`, rowsToText(s.rows)));
+  sets.forEach(s => { s.selected = false; });
+  saveSets();
+  renderSets();
 }
 
 const STORAGE_KEY = 'generator_obojm_sets_v1';
