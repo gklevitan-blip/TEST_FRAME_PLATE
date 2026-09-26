@@ -111,23 +111,25 @@
       </div>
     </div>
 
-    <div id="compareBlock" class="panel">
-      <h2>Сверка по реальной яркости (CIE L*) — по желанию</h2>
-      <div class="row">
-        <div><label>Референс: Hue (°)</label><input type="number" id="refHue" value="40" min="0" max="360"></div>
-        <div><label>Референс: L (HSL)</label><input type="number" id="refL" value="161"></div>
-      </div>
-      <div class="row">
-        <div><label>Сравнить с Hue (°)</label><input type="number" id="targetHue" value="0" min="0" max="360"></div>
-      </div>
-      <div class="btn-row"><button onclick="matchHue()">Найти эквивалент</button></div>
-      <div id="matchOut"></div>
+    <div id="refBlock" class="panel">
+      <h2>Референсные значения — по желанию</h2>
+      <div id="refOut"><div class="empty-msg">Пока не закреплено. Постройте ряд справа и отметьте «Закрепить как референс».</div></div>
     </div>
   </div>
 
   <div id="rightCol" class="panel">
     <h2>Построенный ряд</h2>
     <div id="genOut"><div class="empty-msg">Нажмите «Построить ряд».</div></div>
+    <div id="refCheckRow" class="hint hidden" style="margin-top:10px;">
+      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
+        <input type="checkbox" id="pinRefChk" style="width:16px;height:16px;margin:0;" onchange="onPinRefChange(this.checked)">
+        Закрепить как референс
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
+        <input type="checkbox" id="applyRefChk" style="width:16px;height:16px;margin:0;">
+        Изменить по референсу (то же кол-во позиций, пересчитанный шаг)
+      </label>
+    </div>
   </div>
 </div>
 
@@ -250,6 +252,12 @@ function buildTable(){
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
   document.getElementById('addBtn').disabled = false;
+
+  document.getElementById('refCheckRow').classList.remove('hidden');
+  document.getElementById('pinRefChk').checked = false;
+  const applyChk = document.getElementById('applyRefChk');
+  applyChk.checked = false;
+  applyChk.disabled = !reference;
 }
 
 function rowsToText(rows){
@@ -317,12 +325,27 @@ function insertSetSorted(newSet){
 
 function addSet(){
   if(!lastRows) return;
-  const sig = computeSignature(lastHue, lastMaxVal, lastRows);
+
+  const applyChk = document.getElementById('applyRefChk');
+  const useRef = applyChk && applyChk.checked && reference;
+  let rows = lastRows, refAdjusted = false;
+
+  if(applyChk && applyChk.checked && !reference){
+    showToast('Нет закреплённого референса.');
+    return;
+  }
+  if(useRef){
+    const {hue, start, count, maxVal} = currentInputs();
+    rows = buildRowsByReference(hue, start, count, maxVal).rows;
+    refAdjusted = true;
+  }
+
+  const sig = computeSignature(lastHue, lastMaxVal, rows) + (refAdjusted ? '|ref' : '');
   if(sets.some(s => s.sig === sig)){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows, selected:false, sig, refAdjusted});
   saveSets();
   renderSets();
   showResults();
@@ -351,7 +374,7 @@ function renderSets(){
   }
   container.innerHTML = sets.map((s) => {
     const first = s.rows[0], last = s.rows[s.rows.length-1];
-    const header = `hue=${s.hue}, L ${first.L}-${last.L}, MAX=${s.maxVal}, ${first.pct}-${last.pct}%`;
+    const header = `hue=${s.hue}, L ${first.L}-${last.L}, MAX=${s.maxVal}, ${first.pct}-${last.pct}%` + (s.refAdjusted ? ' (изменен по референсу)' : '');
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     return `
       <div class="set-block">
@@ -378,44 +401,112 @@ function showSelect(){
   lastMaxVal = null;
   document.getElementById('addBtn').disabled = true;
   document.getElementById('genMax').value = 255;
+  document.getElementById('refCheckRow').classList.add('hidden');
+  document.getElementById('pinRefChk').checked = false;
+  document.getElementById('applyRefChk').checked = false;
 }
 
-function matchHue(){
-  const refHue = parseFloat(document.getElementById('refHue').value);
-  const refL = parseFloat(document.getElementById('refL').value);
-  const targetHue = parseFloat(document.getElementById('targetHue').value);
-  const out = document.getElementById('matchOut');
-  if([refHue,refL,targetHue].some(v=>isNaN(v))){
-    out.innerHTML = '<div class="hint">Заполните поля числами.</div>';
+/* ---------- Lab / C* (для «системного соответствия», см. переписку) ---------- */
+const LAB_Xn=0.95047, LAB_Yn=1.0, LAB_Zn=1.08883;
+function rgbToXyz(r,g,b){
+  const rl=srgbToLinear(r), gl=srgbToLinear(g), bl=srgbToLinear(b);
+  return [
+    0.4124564*rl + 0.3575761*gl + 0.1804375*bl,
+    0.2126729*rl + 0.7151522*gl + 0.0721750*bl,
+    0.0193339*rl + 0.1191920*gl + 0.9503041*bl
+  ];
+}
+function fLab(t){
+  const d=6/29;
+  return t > d*d*d ? Math.cbrt(t) : t/(3*d*d)+4/29;
+}
+function labC(r,g,b){
+  const [X,Y,Z] = rgbToXyz(r,g,b);
+  const fx=fLab(X/LAB_Xn), fy=fLab(Y/LAB_Yn), fz=fLab(Z/LAB_Zn);
+  const Lst = 116*fy-16;
+  const a = 500*(fx-fy);
+  const bb = 200*(fy-fz);
+  return {Lst, C: Math.sqrt(a*a+bb*bb)};
+}
+// Первое L (сканируя от белого, 254→1), где C*(hue,L) достигает targetC
+function findBoundaryL(hue, targetC, maxVal){
+  for(let L=254; L>=1; L--){
+    const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
+    if(labC(r,g,b).C >= targetC) return L;
+  }
+  return 1;
+}
+
+/* ---------- Референс: закрепление и применение ---------- */
+const REF_KEY = 'generator_obojm_ref_v1';
+let reference = null; // {hue, maxVal, rows:[{hex,L}], boundaryC, boundaryLst}
+
+function saveRef(){
+  try{ localStorage.setItem(REF_KEY, JSON.stringify(reference)); }
+  catch(e){ console.error('Не удалось сохранить референс:', e); }
+}
+function loadRef(){
+  try{
+    const raw = localStorage.getItem(REF_KEY);
+    if(raw) reference = JSON.parse(raw);
+  }catch(e){ console.error('Не удалось загрузить референс:', e); }
+}
+
+function onPinRefChange(checked){
+  if(!checked) return; // это действие, а не переключатель состояния
+  if(!lastRows){ showToast('Сначала постройте ряд.'); document.getElementById('pinRefChk').checked=false; return; }
+  const last = lastRows[lastRows.length-1];
+  const [r,g,b] = hlsToRgb(lastHue, last.L/255, 1.0, lastMaxVal);
+  const {Lst, C} = labC(r,g,b);
+  reference = {
+    hue: lastHue,
+    maxVal: lastMaxVal,
+    rows: lastRows.map(rr => ({hex: rr.hex, L: rr.L})),
+    boundaryC: C,
+    boundaryLst: Lst
+  };
+  saveRef();
+  renderRefBlock();
+  showToast('Закреплено как референс.');
+  document.getElementById('pinRefChk').checked = false; // действие разовое, не залипает
+}
+
+function clearRef(){
+  reference = null;
+  saveRef();
+  renderRefBlock();
+}
+
+function renderRefBlock(){
+  const out = document.getElementById('refOut');
+  if(!reference){
+    out.innerHTML = '<div class="empty-msg">Пока не закреплено. Постройте ряд справа и отметьте «Закрепить как референс».</div>';
     return;
   }
-  const [rr,rg,rb] = hlsToRgb(refHue, refL/255, 1.0);
-  const refReal = rgbToLstar255(rr,rg,rb);
-  const refHex = toHex(rr,rg,rb);
-
-  let lo=0, hi=255, mid=127, R,G,B;
-  for(let i=0;i<60;i++){
-    mid = (lo+hi)/2;
-    [R,G,B] = hlsToRgb(targetHue, mid/255, 1.0);
-    const L2 = rgbToLstar255(R,G,B);
-    if(Math.abs(L2-refReal)<0.02) break;
-    if(L2<refReal) lo=mid; else hi=mid;
-  }
-  const targetL = Math.round(mid);
-  const [R2,G2,B2] = hlsToRgb(targetHue, targetL/255, 1.0);
-  const targetHex = toHex(R2,G2,B2);
-
+  const strip = reference.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
+  const rowsList = reference.rows.map(r => `<code>${r.hex}</code> L=${r.L}`).join('<br>');
   out.innerHTML = `
+    <div class="hint">hue=${reference.hue}, MAX=${reference.maxVal}</div>
+    <div class="strip" style="margin:6px 0;">${strip}</div>
     <div class="result">
-      Референс: <span class="swatch" style="background:#${refHex}"></span> <code>${refHex}</code>
-      (hue ${refHue}°, L=${refL}) → реальный CIE L* = <b>${refReal.toFixed(1)}</b>
-      <div class="hint">Эквивалент для hue ${targetHue}°: naive HSL L ≈ <b>${targetL}</b>
-        &nbsp;<span class="swatch" style="background:#${targetHex}"></span> <code>${targetHex}</code>
-      </div>
+      Целевая C* (по нижней строке ряда): <b>${reference.boundaryC.toFixed(1)}</b>
+      <div class="hint">Lab L* нижней строки: ${reference.boundaryLst.toFixed(1)}</div>
     </div>
+    <div class="hint" style="margin-top:8px;">${rowsList}</div>
+    <div class="btn-row"><button onclick="clearRef()">Очистить референс</button></div>
   `;
 }
 
+// Пересчёт шага (без усечения): тот же старт и то же кол-во позиций,
+// шаг подбирается так, чтобы последняя строка легла на границу C*(hue) = reference.boundaryC
+function buildRowsByReference(hue, start, count, maxVal){
+  const boundaryL = findBoundaryL(hue, reference.boundaryC, maxVal);
+  const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
+  return {rows: buildRows(hue, start, newStep, count, maxVal), step: newStep, boundaryL};
+}
+
+loadRef();
+renderRefBlock();
 loadSets();
 renderSets();
 </script>
