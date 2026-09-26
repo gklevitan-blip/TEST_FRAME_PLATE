@@ -27,6 +27,10 @@
     width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
     font-size:14px; background:var(--panel); color:var(--ink);
   }
+  input[type=checkbox]{
+    all: revert;
+    width:16px; height:16px; margin:0; accent-color:var(--accent); cursor:pointer;
+  }
   .row{display:flex; gap:10px; flex-wrap:wrap;}
   .row > div{flex:1; min-width:100px;}
   button{
@@ -90,7 +94,6 @@
 
 <div class="screen" id="selectScreen">
   <div id="leftCol">
-    <h1>Выбор обоймы</h1>
     <div class="panel">
       <div class="row">
         <div><label>Hue (°)</label><input type="number" id="genHue" value="40" min="0" max="360"></div>
@@ -112,21 +115,21 @@
     </div>
 
     <div id="refBlock" class="panel">
-      <h2>Референсные значения — по желанию</h2>
-      <div id="refOut"><div class="empty-msg">Пока не закреплено. Постройте ряд справа и отметьте «Закрепить как референс».</div></div>
+      <h2>Референсные значения</h2>
+      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:0 0 10px;">
+        <input type="checkbox" id="pinRefChk" style="width:16px;height:16px;margin:0;" onchange="onPinRefChange(this.checked)">
+        Закрепить текущий ряд как референс
+      </label>
+      <div id="refOut"></div>
     </div>
   </div>
 
   <div id="rightCol" class="panel">
     <h2>Построенный ряд</h2>
-    <div id="genOut"><div class="empty-msg">Нажмите «Построить ряд».</div></div>
+    <div id="genOut"></div>
     <div id="refCheckRow" class="hint hidden" style="margin-top:10px;">
       <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
-        <input type="checkbox" id="pinRefChk" style="width:16px;height:16px;margin:0;" onchange="onPinRefChange(this.checked)">
-        Закрепить как референс
-      </label>
-      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
-        <input type="checkbox" id="applyRefChk" style="width:16px;height:16px;margin:0;">
+        <input type="checkbox" id="applyRefChk" style="width:16px;height:16px;margin:0;" onchange="onApplyRefChange(this.checked)">
         Изменить по референсу (то же кол-во позиций, пересчитанный шаг)
       </label>
     </div>
@@ -152,6 +155,8 @@
 let sets = [];
 let nextId = 1;
 let lastRows = null;
+let lastRowsOriginal = null;
+let lastRefAdjusted = false;
 let lastHue = null;
 let lastMaxVal = null;
 
@@ -236,28 +241,57 @@ function buildTable(){
   const {hue, start, step, count, maxVal} = currentInputs();
   const rows = buildRows(hue, start, step, count, maxVal);
 
-  if(lastRows && computeSignature(hue, maxVal, rows) === computeSignature(lastHue, lastMaxVal, lastRows)){
+  if(lastRowsOriginal && computeSignature(hue, maxVal, rows) === computeSignature(lastHue, lastMaxVal, lastRowsOriginal)){
     showToast('Уже создано.');
     return;
   }
 
+  lastRowsOriginal = rows;
   lastRows = rows;
   lastHue = hue;
   lastMaxVal = maxVal;
+  lastRefAdjusted = false;
 
+  renderTable(hue, maxVal, rows);
+
+  document.getElementById('refCheckRow').classList.remove('hidden');
+  const applyChk = document.getElementById('applyRefChk');
+  applyChk.checked = false;
+  applyChk.disabled = !reference;
+}
+
+function renderTable(hue, maxVal, rows){
   let html = '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>%</th></tr>';
-  lastRows.forEach(r => {
+  rows.forEach(r => {
     html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.pct}%</td></tr>`;
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
   document.getElementById('addBtn').disabled = false;
+}
 
-  document.getElementById('refCheckRow').classList.remove('hidden');
-  document.getElementById('pinRefChk').checked = false;
-  const applyChk = document.getElementById('applyRefChk');
-  applyChk.checked = false;
-  applyChk.disabled = !reference;
+function summaryLine(hue, maxVal, rows){
+  const first = rows[0], last = rows[rows.length-1];
+  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, ${first.pct}-${last.pct}%`;
+}
+
+function onApplyRefChange(checked){
+  if(!lastRowsOriginal) return;
+  if(checked){
+    if(!reference){
+      showToast('Нет закреплённого референса.');
+      document.getElementById('applyRefChk').checked = false;
+      return;
+    }
+    const {hue, start, count, maxVal} = currentInputs();
+    const {rows} = buildRowsByReference(hue, start, count, maxVal);
+    lastRows = rows;
+    lastRefAdjusted = true;
+  } else {
+    lastRows = lastRowsOriginal;
+    lastRefAdjusted = false;
+  }
+  renderTable(lastHue, lastMaxVal, lastRows);
 }
 
 function rowsToText(rows){
@@ -325,27 +359,12 @@ function insertSetSorted(newSet){
 
 function addSet(){
   if(!lastRows) return;
-
-  const applyChk = document.getElementById('applyRefChk');
-  const useRef = applyChk && applyChk.checked && reference;
-  let rows = lastRows, refAdjusted = false;
-
-  if(applyChk && applyChk.checked && !reference){
-    showToast('Нет закреплённого референса.');
-    return;
-  }
-  if(useRef){
-    const {hue, start, count, maxVal} = currentInputs();
-    rows = buildRowsByReference(hue, start, count, maxVal).rows;
-    refAdjusted = true;
-  }
-
-  const sig = computeSignature(lastHue, lastMaxVal, rows) + (refAdjusted ? '|ref' : '');
+  const sig = computeSignature(lastHue, lastMaxVal, lastRows) + (lastRefAdjusted ? '|ref' : '');
   if(sets.some(s => s.sig === sig)){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows, selected:false, sig, refAdjusted});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig, refAdjusted: lastRefAdjusted});
   saveSets();
   renderSets();
   showResults();
@@ -369,12 +388,11 @@ function clearAll(){
 function renderSets(){
   const container = document.getElementById('setsContainer');
   if(!sets.length){
-    container.innerHTML = '<div class="empty-msg">Пока ничего не добавлено.</div>';
+    container.innerHTML = '';
     return;
   }
   container.innerHTML = sets.map((s) => {
-    const first = s.rows[0], last = s.rows[s.rows.length-1];
-    const header = `hue=${s.hue}, L ${first.L}-${last.L}, MAX=${s.maxVal}, ${first.pct}-${last.pct}%` + (s.refAdjusted ? ' (изменен по референсу)' : '');
+    const header = summaryLine(s.hue, s.maxVal, s.rows) + (s.refAdjusted ? ' (изменен по референсу)' : '');
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     return `
       <div class="set-block">
@@ -397,12 +415,13 @@ function showSelect(){
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('selectScreen').classList.remove('hidden');
   lastRows = null;
+  lastRowsOriginal = null;
+  lastRefAdjusted = false;
   lastHue = null;
   lastMaxVal = null;
   document.getElementById('addBtn').disabled = true;
   document.getElementById('genMax').value = 255;
   document.getElementById('refCheckRow').classList.add('hidden');
-  document.getElementById('pinRefChk').checked = false;
   document.getElementById('applyRefChk').checked = false;
 }
 
@@ -457,42 +476,37 @@ function onPinRefChange(checked){
   if(!lastRows){ showToast('Сначала постройте ряд.'); document.getElementById('pinRefChk').checked=false; return; }
   const last = lastRows[lastRows.length-1];
   const [r,g,b] = hlsToRgb(lastHue, last.L/255, 1.0, lastMaxVal);
-  const {Lst, C} = labC(r,g,b);
+  const {C} = labC(r,g,b);
   reference = {
     hue: lastHue,
     maxVal: lastMaxVal,
-    rows: lastRows.map(rr => ({hex: rr.hex, L: rr.L})),
     boundaryC: C,
-    boundaryLst: Lst
+    summary: summaryLine(lastHue, lastMaxVal, lastRows)
   };
   saveRef();
   renderRefBlock();
   showToast('Закреплено как референс.');
   document.getElementById('pinRefChk').checked = false; // действие разовое, не залипает
+  const applyChk = document.getElementById('applyRefChk');
+  if(applyChk) applyChk.disabled = false;
 }
 
 function clearRef(){
   reference = null;
   saveRef();
   renderRefBlock();
+  const applyChk = document.getElementById('applyRefChk');
+  if(applyChk) applyChk.disabled = true;
 }
 
 function renderRefBlock(){
   const out = document.getElementById('refOut');
   if(!reference){
-    out.innerHTML = '<div class="empty-msg">Пока не закреплено. Постройте ряд справа и отметьте «Закрепить как референс».</div>';
+    out.innerHTML = '';
     return;
   }
-  const strip = reference.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
-  const rowsList = reference.rows.map(r => `<code>${r.hex}</code> L=${r.L}`).join('<br>');
   out.innerHTML = `
-    <div class="hint">hue=${reference.hue}, MAX=${reference.maxVal}</div>
-    <div class="strip" style="margin:6px 0;">${strip}</div>
-    <div class="result">
-      Целевая C* (по нижней строке ряда): <b>${reference.boundaryC.toFixed(1)}</b>
-      <div class="hint">Lab L* нижней строки: ${reference.boundaryLst.toFixed(1)}</div>
-    </div>
-    <div class="hint" style="margin-top:8px;">${rowsList}</div>
+    <div class="hint">${reference.summary}</div>
     <div class="btn-row"><button onclick="clearRef()">Очистить референс</button></div>
   `;
 }
