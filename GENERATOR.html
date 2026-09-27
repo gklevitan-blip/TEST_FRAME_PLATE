@@ -7,6 +7,7 @@
 <link rel="apple-touch-icon" href="icon_generator.png">
 <meta name="theme-color" content="#141517">
 <title>Генератор обойм</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
     --bg:#141517; --panel:#1d1f22; --line:#33363b; --ink:#ececec; --dim:#9aa0a6;
@@ -345,8 +346,49 @@ function downloadCurrent(){
 }
 function downloadSelectedTxt(){
   const chosen = sets.filter(s => s.selected);
-  if(!chosen.length) return;
-  chosen.forEach(s => triggerDownload(`HUE_${s.hue}.txt`, rowsToText(s.rows)));
+  if(!chosen.length){ showToast('Ничего не отмечено.'); return; }
+
+  if(chosen.length === 1){
+    // Один файл — просто txt, без архива.
+    triggerDownload(`HUE_${chosen[0].hue}.txt`, rowsToText(chosen[0].rows));
+    afterDownloadSelected();
+    return;
+  }
+
+  if(typeof JSZip === 'undefined'){
+    // Нет сети / библиотека не загрузилась — fallback на старое поведение.
+    chosen.forEach(s => triggerDownload(`HUE_${s.hue}.txt`, rowsToText(s.rows)));
+    afterDownloadSelected();
+    return;
+  }
+
+  const zip = new JSZip();
+  const usedNames = {};
+  chosen.forEach(s => {
+    let name = `HUE_${s.hue}.txt`;
+    if(usedNames[name] !== undefined){
+      usedNames[name]++;
+      name = `HUE_${s.hue}_${usedNames[name]}.txt`;
+    } else {
+      usedNames[name] = 0;
+    }
+    zip.file(name, rowsToText(s.rows));
+  });
+
+  zip.generateAsync({type:'blob'}).then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'HUE_Font.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    afterDownloadSelected();
+  }).catch(e => {
+    console.error('Не удалось создать zip:', e);
+    showToast('Ошибка при создании архива.');
+  });
+}
+
+function afterDownloadSelected(){
   sets.forEach(s => { s.selected = false; });
   saveSets();
   renderSets();
