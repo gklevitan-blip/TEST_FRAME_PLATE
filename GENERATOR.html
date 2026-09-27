@@ -29,10 +29,21 @@
     font-size:14px; background:var(--panel); color:var(--ink);
   }
   input[type=checkbox]{
-    all: revert;
-    width:20px; height:20px; margin:0; accent-color:var(--accent); cursor:pointer;
-    border-radius:3px; border:2px solid var(--dim);
+    -webkit-appearance:none; appearance:none;
+    width:20px; height:20px; margin:0; cursor:pointer; flex-shrink:0;
+    border-radius:4px; border:2px solid var(--dim); background:var(--panel);
+    position:relative; transition:background .15s ease, border-color .15s ease;
   }
+  input[type=checkbox]:checked{
+    background:var(--accent); border-color:var(--accent);
+  }
+  input[type=checkbox]:checked::after{
+    content:''; position:absolute; left:6px; top:2px;
+    width:5px; height:10px; border:solid #fff; border-width:0 2px 2px 0;
+    transform:rotate(45deg);
+  }
+  .set-header input[type=checkbox]{width:16px; height:16px;}
+  .set-header input[type=checkbox]:checked::after{left:4px; top:1px; width:4px; height:8px;}
   .row{display:flex; gap:10px; flex-wrap:wrap;}
   .row > div{flex:1; min-width:100px;}
   button{
@@ -73,7 +84,6 @@
     display:flex; align-items:center; gap:8px;
     font-size:13px; color:#ccc; font-family:ui-monospace,Menlo,monospace; margin-bottom:6px;
   }
-  .set-header input[type=checkbox]{width:16px; height:16px; margin:0;}
   .set-header-text{flex:1; min-width:0;}
   .del-x{
     width:22px; height:22px; padding:0; flex-shrink:0;
@@ -82,6 +92,19 @@
   }
   .strip{display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line);}
   .strip > div{flex:1; min-width:0; height:64px;}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.6);
+    display:flex; align-items:center; justify-content:center; z-index:10000; padding:16px;
+  }
+  .modal-box{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:16px; max-width:480px; width:100%; max-height:82vh; overflow:auto;
+  }
+  .modal-box h2{margin:0;}
+  .name-row{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
+  .name-row .hueInput{flex:0 0 72px;}
+  .name-row .nameInput{flex:1;}
 
   .toast{
     position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(10px);
@@ -102,11 +125,14 @@
         <div><label>Старт L</label><input type="number" id="genStart" value="241"></div>
       </div>
       <div class="row">
-        <div><label>Шаг</label><input type="number" id="genStep" value="5" step="0.1"></div>
+        <div><label>Шаг</label><input type="number" id="genStep" value="6" step="0.1"></div>
         <div><label>Кол-во позиций</label><input type="number" id="genCount" value="10" min="1" max="60"></div>
       </div>
       <div class="row">
-        <div><label>Максимум канала (по умолчанию 255)</label><input type="number" id="genMax" value="255" min="1" max="255"></div>
+        <div style="flex:2 1 140px;"><label>Максимум канала (по умолчанию 255)</label><input type="number" id="genMax" value="255" min="1" max="255"></div>
+        <div style="flex:1 1 120px; display:flex; align-items:flex-end;">
+          <button type="button" style="width:100%;" onclick="openNamesSheet()">Список названий</button>
+        </div>
       </div>
       <div class="btn-row">
         <button class="primary" onclick="buildTable()">Построить ряд</button>
@@ -123,6 +149,9 @@
         Закрепить текущий ряд как референс
       </label>
       <div id="refOut"></div>
+      <div class="btn-row">
+        <button id="genAllBtn" class="primary" onclick="generateAllFromSheet()" disabled>Создать все семейства по списку</button>
+      </div>
     </div>
   </div>
 
@@ -132,13 +161,28 @@
     <div id="refCheckRow" class="hint hidden" style="margin-top:10px;">
       <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
         <input type="checkbox" id="applyRefChk" onchange="onApplyRefChange(this.checked)">
-        Изменить по референсу (то же кол-во позиций, пересчитанный шаг)
-      </label>
-      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
-        <input type="checkbox" id="applyRefSafeChk" onchange="onApplyRefSafeChange(this.checked)">
-        Изменить по референсу (со стоп-поправкой у потолка)
+        Изменить по референсу
       </label>
     </div>
+  </div>
+</div>
+
+<div id="namesModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="topbar" style="margin-bottom:12px;">
+      <h2>Список названий семейств (по hue)</h2>
+      <button class="del-x" onclick="closeNamesSheet()" title="Закрыть">✕</button>
+    </div>
+    <div class="hint" style="margin:0 0 10px;">Название присваивается семейству на экране результатов и используется как имя txt-файла.</div>
+    <div id="namesRows"></div>
+    <div class="btn-row">
+      <button onclick="addNameRow()">Добавить строку</button>
+      <button onclick="saveNamesToTxt()">Сохранить в txt</button>
+      <button onclick="document.getElementById('namesFileInput').click()">Загрузить из txt</button>
+      <button class="primary" onclick="closeNamesSheet()">Готово</button>
+    </div>
+    <input type="file" id="namesFileInput" accept=".txt" class="hidden" onchange="loadNamesFromTxt(this.files[0])">
+    <div class="hint" style="margin-top:8px;">Формат файла: на каждой строке «hue Название», например «40 Терракота». Загрузка полностью заменяет текущий список.</div>
   </div>
 </div>
 
@@ -148,6 +192,7 @@
       <button onclick="showSelect()">Вернуться к выбору</button>
     </div>
     <div class="right-actions">
+      <button id="selectAllBtn" onclick="selectAllSets()">Выбрать все</button>
       <button onclick="downloadSelectedTxt()">Создать txt файл</button>
       <button onclick="clearAll()">Очистить</button>
     </div>
@@ -162,7 +207,8 @@ let sets = [];
 let nextId = 1;
 let lastRows = null;
 let lastRowsOriginal = null;
-let lastRefMode = null; // null | 'ref' | 'safe'
+let lastRefMode = null; // null | 'safe'
+let lastRefCapped = false;
 let lastHue = null;
 let lastMaxVal = null;
 
@@ -257,6 +303,7 @@ function buildTable(){
   lastHue = hue;
   lastMaxVal = maxVal;
   lastRefMode = null;
+  lastRefCapped = false;
 
   renderTable(hue, maxVal, rows);
 
@@ -264,9 +311,6 @@ function buildTable(){
   const applyChk = document.getElementById('applyRefChk');
   applyChk.checked = false;
   applyChk.disabled = !reference;
-  const applySafeChk = document.getElementById('applyRefSafeChk');
-  applySafeChk.checked = false;
-  applySafeChk.disabled = !reference;
 }
 
 function renderTable(hue, maxVal, rows){
@@ -286,14 +330,13 @@ function summaryLine(hue, maxVal, rows){
 
 function applyRefMode(mode){
   const {hue, start, count, maxVal} = currentInputs();
-  if(mode === 'ref'){
-    const {rows} = buildRowsByReference(hue, start, count, maxVal);
+  if(mode === 'safe'){
+    const {rows, capped} = buildRowsByReferenceSafe(hue, start, count, maxVal);
     lastRows = rows;
-  } else if(mode === 'safe'){
-    const {rows} = buildRowsByReferenceSafe(hue, start, count, maxVal);
-    lastRows = rows;
+    lastRefCapped = capped;
   } else {
     lastRows = lastRowsOriginal;
+    lastRefCapped = false;
   }
   lastRefMode = mode;
   renderTable(lastHue, lastMaxVal, lastRows);
@@ -307,22 +350,6 @@ function onApplyRefChange(checked){
       document.getElementById('applyRefChk').checked = false;
       return;
     }
-    document.getElementById('applyRefSafeChk').checked = false;
-    applyRefMode('ref');
-  } else {
-    applyRefMode(null);
-  }
-}
-
-function onApplyRefSafeChange(checked){
-  if(!lastRowsOriginal) return;
-  if(checked){
-    if(!reference){
-      showToast('Нет закреплённого референса.');
-      document.getElementById('applyRefSafeChk').checked = false;
-      return;
-    }
-    document.getElementById('applyRefChk').checked = false;
     applyRefMode('safe');
   } else {
     applyRefMode(null);
@@ -342,7 +369,8 @@ function triggerDownload(filename, text){
 }
 function downloadCurrent(){
   if(!lastRows){ buildTable(); }
-  triggerDownload(`HUE_${lastHue}.txt`, rowsToText(lastRows));
+  const nm = getNameForHue(lastHue);
+  triggerDownload(nm ? `${nm}.txt` : `HUE_${lastHue}.txt`, rowsToText(lastRows));
 }
 function downloadSelectedTxt(){
   const chosen = sets.filter(s => s.selected);
@@ -350,14 +378,15 @@ function downloadSelectedTxt(){
 
   if(chosen.length === 1){
     // Один файл — просто txt, без архива.
-    triggerDownload(`HUE_${chosen[0].hue}.txt`, rowsToText(chosen[0].rows));
+    const nm0 = chosen[0].name;
+    triggerDownload(nm0 ? `${nm0}.txt` : `HUE_${chosen[0].hue}.txt`, rowsToText(chosen[0].rows));
     afterDownloadSelected();
     return;
   }
 
   if(typeof JSZip === 'undefined'){
     // Нет сети / библиотека не загрузилась — fallback на старое поведение.
-    chosen.forEach(s => triggerDownload(`HUE_${s.hue}.txt`, rowsToText(s.rows)));
+    chosen.forEach(s => triggerDownload(s.name ? `${s.name}.txt` : `HUE_${s.hue}.txt`, rowsToText(s.rows)));
     afterDownloadSelected();
     return;
   }
@@ -365,10 +394,10 @@ function downloadSelectedTxt(){
   const zip = new JSZip();
   const usedNames = {};
   chosen.forEach(s => {
-    let name = `HUE_${s.hue}.txt`;
+    let name = s.name ? `${s.name}.txt` : `HUE_${s.hue}.txt`;
     if(usedNames[name] !== undefined){
       usedNames[name]++;
-      name = `HUE_${s.hue}_${usedNames[name]}.txt`;
+      name = name.replace(/\.txt$/, `_${usedNames[name]}.txt`);
     } else {
       usedNames[name] = 0;
     }
@@ -413,6 +442,8 @@ function loadSets(){
       nextId = data.nextId || (sets.reduce((m,s)=>Math.max(m,s.id),0)+1);
       sets.forEach(s => {
         if(s.maxVal === undefined) s.maxVal = 255;
+        if(s.name === undefined) s.name = '';
+        if(s.capped === undefined) s.capped = false;
         s.sig = computeSignature(s.hue, s.maxVal, s.rows);
       });
     }
@@ -440,7 +471,7 @@ function addSet(){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig, refMode: lastRefMode});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig, refMode: lastRefMode, capped: lastRefMode==='safe' ? lastRefCapped : false, name: getNameForHue(lastHue)});
   saveSets();
   renderSets();
   showResults();
@@ -449,6 +480,20 @@ function addSet(){
 function toggleSelect(id, checked){
   const s = sets.find(s=>s.id===id);
   if(s){ s.selected = checked; saveSets(); }
+  updateSelectAllBtn();
+}
+function selectAllSets(){
+  if(!sets.length) return;
+  const allSelected = sets.every(s => s.selected);
+  sets.forEach(s => s.selected = !allSelected);
+  saveSets();
+  renderSets();
+}
+function updateSelectAllBtn(){
+  const btn = document.getElementById('selectAllBtn');
+  if(!btn) return;
+  const allSelected = sets.length > 0 && sets.every(s => s.selected);
+  btn.textContent = allSelected ? 'Снять выделение' : 'Выбрать все';
 }
 function deleteOne(id){
   sets = sets.filter(s => s.id !== id);
@@ -465,11 +510,14 @@ function renderSets(){
   const container = document.getElementById('setsContainer');
   if(!sets.length){
     container.innerHTML = '';
+    updateSelectAllBtn();
     return;
   }
   container.innerHTML = sets.map((s) => {
-    const tag = s.refMode === 'safe' ? ' (изменен по референсу, стоп-поправка)' : (s.refMode === 'ref' ? ' (изменен по референсу)' : '');
-    const header = summaryLine(s.hue, s.maxVal, s.rows) + tag;
+    const tag = s.refMode === 'safe'
+      ? (s.capped ? ' (изменен по референсу, стоп-поправка)' : ' (изменен по референсу)')
+      : '';
+    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     return `
       <div class="set-block">
@@ -482,6 +530,7 @@ function renderSets(){
       </div>
     `;
   }).join('');
+  updateSelectAllBtn();
 }
 
 function showResults(){
@@ -499,8 +548,11 @@ function showSelect(){
   document.getElementById('addBtn').disabled = true;
   document.getElementById('genMax').value = 255;
   document.getElementById('refCheckRow').classList.add('hidden');
+  if(sets.length){
+    sets.forEach(s => s.selected = false);
+    saveSets();
+  }
   document.getElementById('applyRefChk').checked = false;
-  document.getElementById('applyRefSafeChk').checked = false;
 }
 
 /* ---------- Lab / C* (для «системного соответствия», см. переписку) ---------- */
@@ -527,11 +579,12 @@ function labC(r,g,b){
 }
 // Первое L (сканируя от белого, 254→1), где C*(hue,L) достигает targetC
 function findBoundaryL(hue, targetC, maxVal){
-  for(let L=254; L>=1; L--){
+  const {peakL} = findPeakC(hue, maxVal);
+  for(let L=254; L>=peakL; L--){
     const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
     if(labC(r,g,b).C >= targetC) return L;
   }
-  return 1;
+  return peakL; // цель физически недостижима для этого hue — не ныряем глубже собственного пика
 }
 
 function findPeakC(hue, maxVal){
@@ -552,12 +605,13 @@ const SAFE_HEADROOM_RATIO = 0.75; // не использовать больше 
 function findBoundaryLSafe(hue, targetC, maxVal){
   const {peakC, peakL} = findPeakC(hue, maxVal);
   const cap = peakC * SAFE_HEADROOM_RATIO;
+  const capped = targetC > cap;
   const effectiveTarget = Math.min(targetC, cap);
   for(let L=254; L>=peakL; L--){
     const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
-    if(labC(r,g,b).C >= effectiveTarget) return L;
+    if(labC(r,g,b).C >= effectiveTarget) return {L, capped};
   }
-  return peakL;
+  return {L: peakL, capped};
 }
 
 /* ---------- Референс: закрепление и применение ---------- */
@@ -599,8 +653,6 @@ function clearRef(){
   renderRefBlock();
   const applyChk = document.getElementById('applyRefChk');
   if(applyChk) applyChk.disabled = true;
-  const applySafeChk = document.getElementById('applyRefSafeChk');
-  if(applySafeChk) applySafeChk.disabled = true;
 }
 
 function renderRefBlock(){
@@ -608,6 +660,8 @@ function renderRefBlock(){
   const pinChk = document.getElementById('pinRefChk');
   pinChk.checked = !!reference;
   pinChk.disabled = !!reference;
+  const genAllBtn = document.getElementById('genAllBtn');
+  if(genAllBtn) genAllBtn.disabled = !reference;
   if(!reference){
     out.innerHTML = '';
     return;
@@ -618,24 +672,137 @@ function renderRefBlock(){
   `;
 }
 
-// Пересчёт шага (без усечения): тот же старт и то же кол-во позиций,
-// шаг подбирается так, чтобы последняя строка легла на границу C*(hue) = reference.boundaryC
-function buildRowsByReference(hue, start, count, maxVal){
-  const boundaryL = findBoundaryL(hue, reference.boundaryC, maxVal);
+function buildRowsByReferenceSafe(hue, start, count, maxVal){
+  const {L: boundaryL, capped} = findBoundaryLSafe(hue, reference.boundaryC, maxVal);
   const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
-  return {rows: buildRows(hue, start, newStep, count, maxVal), step: newStep, boundaryL};
+  return {rows: buildRows(hue, start, newStep, count, maxVal), step: newStep, boundaryL, capped};
 }
 
-function buildRowsByReferenceSafe(hue, start, count, maxVal){
-  const boundaryL = findBoundaryLSafe(hue, reference.boundaryC, maxVal);
-  const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
-  return {rows: buildRows(hue, start, newStep, count, maxVal), step: newStep, boundaryL};
+/* ---------- Список названий семейств (по hue) ---------- */
+const NAMES_KEY = 'generator_obojm_names_v1';
+let hueNames = []; // [{hue, name}]
+
+function saveNames(){
+  try{ localStorage.setItem(NAMES_KEY, JSON.stringify(hueNames)); }
+  catch(e){ console.error('Не удалось сохранить список названий:', e); }
+}
+function loadNames(){
+  try{
+    const raw = localStorage.getItem(NAMES_KEY);
+    if(raw){ const data = JSON.parse(raw); if(Array.isArray(data)) hueNames = data; }
+  }catch(e){ console.error('Не удалось загрузить список названий:', e); }
+}
+function getNameForHue(hue){
+  const found = hueNames.find(n => Number(n.hue) === Number(hue));
+  return found && found.name ? found.name.trim() : '';
+}
+function sortNames(){
+  hueNames.sort((a,b) => Number(a.hue) - Number(b.hue));
+}
+function openNamesSheet(){
+  sortNames();
+  renderNamesSheet();
+  document.getElementById('namesModal').classList.remove('hidden');
+}
+function closeNamesSheet(){
+  sortNames();
+  saveNames();
+  renderNamesSheet();
+  document.getElementById('namesModal').classList.add('hidden');
+}
+function addNameRow(){
+  hueNames.push({hue:0, name:''});
+  saveNames();
+  renderNamesSheet();
+}
+function updateNameRow(idx, field, value){
+  if(!hueNames[idx]) return;
+  hueNames[idx][field] = field==='hue' ? (parseFloat(value)||0) : (value||'').toUpperCase();
+  saveNames();
+}
+function deleteNameRow(idx){
+  hueNames.splice(idx,1);
+  saveNames();
+  renderNamesSheet();
+}
+function renderNamesSheet(){
+  const c = document.getElementById('namesRows');
+  if(!hueNames.length){
+    c.innerHTML = '<div class="empty-msg">Список пуст. Добавьте строку.</div>';
+    return;
+  }
+  c.innerHTML = hueNames.map((n, i) => `
+    <div class="name-row">
+      <input class="hueInput" type="number" value="${n.hue}" oninput="updateNameRow(${i},'hue',this.value)">
+      <input class="nameInput" type="text" value="${n.name}" placeholder="Название" oninput="this.value=this.value.toUpperCase(); updateNameRow(${i},'name',this.value)">
+      <button class="del-x" onclick="deleteNameRow(${i})" title="Удалить строку">✕</button>
+    </div>
+  `).join('');
+}
+
+function saveNamesToTxt(){
+  if(!hueNames.length){ showToast('Список пуст.'); return; }
+  const text = hueNames.map(n => `${n.hue} ${(n.name||'').trim()}`).join('\n') + '\n';
+  triggerDownload('Названия_семейств.txt', text);
+}
+
+function loadNamesFromTxt(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const lines = String(reader.result).split(/\r?\n/);
+    const parsed = [];
+    const errors = [];
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if(!trimmed) return;
+      const m = trimmed.match(/^(-?\d+(?:\.\d+)?)\s+(.+)$/);
+      if(!m){ errors.push(`Строка ${i+1}: "${line}"`); return; }
+      parsed.push({hue: parseFloat(m[1]), name: m[2].trim().toUpperCase()});
+    });
+    if(errors.length){
+      showToast(`Ошибка в файле (${errors.length}), список не изменён.`);
+      console.error('Не удалось разобрать строки:', errors);
+      return;
+    }
+    hueNames = parsed;
+    sortNames();
+    saveNames();
+    renderNamesSheet();
+    showToast(`Загружено строк: ${hueNames.length}`);
+  };
+  reader.onerror = () => showToast('Не удалось прочитать файл.');
+  reader.readAsText(file, 'utf-8');
+  document.getElementById('namesFileInput').value = '';
+}
+
+function generateAllFromSheet(){
+  if(!reference){ showToast('Сначала закрепите референс.'); return; }
+  if(!hueNames.length){ showToast('Список названий пуст.'); return; }
+  const {start, count, maxVal} = currentInputs();
+  let added = 0;
+  hueNames.forEach(entry => {
+    const hue = Number(entry.hue);
+    const {rows, capped} = buildRowsByReferenceSafe(hue, start, count, maxVal);
+    const sig = computeSignature(hue, maxVal, rows) + '|safe';
+    if(sets.some(s => s.sig === sig)) return;
+    insertSetSorted({
+      id: nextId++, hue, maxVal, rows, selected:false, sig,
+      refMode:'safe', capped, name: (entry.name||'').trim()
+    });
+    added++;
+  });
+  saveSets();
+  renderSets();
+  showResults();
+  showToast(added ? `Создано семейств: ${added}` : 'Все семейства уже созданы.');
 }
 
 loadRef();
 renderRefBlock();
 loadSets();
 renderSets();
+loadNames();
 </script>
 </body>
 </html>
