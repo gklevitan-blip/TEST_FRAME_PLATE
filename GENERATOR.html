@@ -29,7 +29,8 @@
   }
   input[type=checkbox]{
     all: revert;
-    width:16px; height:16px; margin:0; accent-color:var(--accent); cursor:pointer;
+    width:20px; height:20px; margin:0; accent-color:var(--accent); cursor:pointer;
+    border-radius:3px; border:2px solid var(--dim);
   }
   .row{display:flex; gap:10px; flex-wrap:wrap;}
   .row > div{flex:1; min-width:100px;}
@@ -117,7 +118,7 @@
     <div id="refBlock" class="panel">
       <h2>Референсные значения</h2>
       <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:0 0 10px;">
-        <input type="checkbox" id="pinRefChk" style="width:16px;height:16px;margin:0;" onchange="onPinRefChange(this.checked)">
+        <input type="checkbox" id="pinRefChk" onchange="onPinRefChange(this.checked)">
         Закрепить текущий ряд как референс
       </label>
       <div id="refOut"></div>
@@ -129,8 +130,12 @@
     <div id="genOut"></div>
     <div id="refCheckRow" class="hint hidden" style="margin-top:10px;">
       <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
-        <input type="checkbox" id="applyRefChk" style="width:16px;height:16px;margin:0;" onchange="onApplyRefChange(this.checked)">
+        <input type="checkbox" id="applyRefChk" onchange="onApplyRefChange(this.checked)">
         Изменить по референсу (то же кол-во позиций, пересчитанный шаг)
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
+        <input type="checkbox" id="applyRefSafeChk" onchange="onApplyRefSafeChange(this.checked)">
+        Изменить по референсу (со стоп-поправкой у потолка)
       </label>
     </div>
   </div>
@@ -156,7 +161,7 @@ let sets = [];
 let nextId = 1;
 let lastRows = null;
 let lastRowsOriginal = null;
-let lastRefAdjusted = false;
+let lastRefMode = null; // null | 'ref' | 'safe'
 let lastHue = null;
 let lastMaxVal = null;
 
@@ -250,7 +255,7 @@ function buildTable(){
   lastRows = rows;
   lastHue = hue;
   lastMaxVal = maxVal;
-  lastRefAdjusted = false;
+  lastRefMode = null;
 
   renderTable(hue, maxVal, rows);
 
@@ -258,6 +263,9 @@ function buildTable(){
   const applyChk = document.getElementById('applyRefChk');
   applyChk.checked = false;
   applyChk.disabled = !reference;
+  const applySafeChk = document.getElementById('applyRefSafeChk');
+  applySafeChk.checked = false;
+  applySafeChk.disabled = !reference;
 }
 
 function renderTable(hue, maxVal, rows){
@@ -275,6 +283,21 @@ function summaryLine(hue, maxVal, rows){
   return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, ${first.pct}-${last.pct}%`;
 }
 
+function applyRefMode(mode){
+  const {hue, start, count, maxVal} = currentInputs();
+  if(mode === 'ref'){
+    const {rows} = buildRowsByReference(hue, start, count, maxVal);
+    lastRows = rows;
+  } else if(mode === 'safe'){
+    const {rows} = buildRowsByReferenceSafe(hue, start, count, maxVal);
+    lastRows = rows;
+  } else {
+    lastRows = lastRowsOriginal;
+  }
+  lastRefMode = mode;
+  renderTable(lastHue, lastMaxVal, lastRows);
+}
+
 function onApplyRefChange(checked){
   if(!lastRowsOriginal) return;
   if(checked){
@@ -283,15 +306,26 @@ function onApplyRefChange(checked){
       document.getElementById('applyRefChk').checked = false;
       return;
     }
-    const {hue, start, count, maxVal} = currentInputs();
-    const {rows} = buildRowsByReference(hue, start, count, maxVal);
-    lastRows = rows;
-    lastRefAdjusted = true;
+    document.getElementById('applyRefSafeChk').checked = false;
+    applyRefMode('ref');
   } else {
-    lastRows = lastRowsOriginal;
-    lastRefAdjusted = false;
+    applyRefMode(null);
   }
-  renderTable(lastHue, lastMaxVal, lastRows);
+}
+
+function onApplyRefSafeChange(checked){
+  if(!lastRowsOriginal) return;
+  if(checked){
+    if(!reference){
+      showToast('Нет закреплённого референса.');
+      document.getElementById('applyRefSafeChk').checked = false;
+      return;
+    }
+    document.getElementById('applyRefChk').checked = false;
+    applyRefMode('safe');
+  } else {
+    applyRefMode(null);
+  }
 }
 
 function rowsToText(rows){
@@ -359,12 +393,12 @@ function insertSetSorted(newSet){
 
 function addSet(){
   if(!lastRows) return;
-  const sig = computeSignature(lastHue, lastMaxVal, lastRows) + (lastRefAdjusted ? '|ref' : '');
+  const sig = computeSignature(lastHue, lastMaxVal, lastRows) + (lastRefMode ? '|'+lastRefMode : '');
   if(sets.some(s => s.sig === sig)){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig, refAdjusted: lastRefAdjusted});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig, refMode: lastRefMode});
   saveSets();
   renderSets();
   showResults();
@@ -392,7 +426,8 @@ function renderSets(){
     return;
   }
   container.innerHTML = sets.map((s) => {
-    const header = summaryLine(s.hue, s.maxVal, s.rows) + (s.refAdjusted ? ' (изменен по референсу)' : '');
+    const tag = s.refMode === 'safe' ? ' (изменен по референсу, стоп-поправка)' : (s.refMode === 'ref' ? ' (изменен по референсу)' : '');
+    const header = summaryLine(s.hue, s.maxVal, s.rows) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     return `
       <div class="set-block">
@@ -416,13 +451,14 @@ function showSelect(){
   document.getElementById('selectScreen').classList.remove('hidden');
   lastRows = null;
   lastRowsOriginal = null;
-  lastRefAdjusted = false;
+  lastRefMode = null;
   lastHue = null;
   lastMaxVal = null;
   document.getElementById('addBtn').disabled = true;
   document.getElementById('genMax').value = 255;
   document.getElementById('refCheckRow').classList.add('hidden');
   document.getElementById('applyRefChk').checked = false;
+  document.getElementById('applyRefSafeChk').checked = false;
 }
 
 /* ---------- Lab / C* (для «системного соответствия», см. переписку) ---------- */
@@ -456,6 +492,32 @@ function findBoundaryL(hue, targetC, maxVal){
   return 1;
 }
 
+function findPeakC(hue, maxVal){
+  let peakC = 0, peakL = 128;
+  for(let L=254; L>=1; L--){
+    const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
+    const C = labC(r,g,b).C;
+    if(C > peakC){ peakC = C; peakL = L; }
+  }
+  return {peakC, peakL};
+}
+
+const SAFE_HEADROOM_RATIO = 0.75; // не использовать больше 75% пикового запаса C* для hue
+
+// Безопасная граница: если цель требует больше 75% пикового запаса hue,
+// останавливаемся на этой доле пика, а не на самой цели, и никогда не
+// сканируем ниже peakL (там кривая C* уже идёт вниз — туда лезть нельзя).
+function findBoundaryLSafe(hue, targetC, maxVal){
+  const {peakC, peakL} = findPeakC(hue, maxVal);
+  const cap = peakC * SAFE_HEADROOM_RATIO;
+  const effectiveTarget = Math.min(targetC, cap);
+  for(let L=254; L>=peakL; L--){
+    const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
+    if(labC(r,g,b).C >= effectiveTarget) return L;
+  }
+  return peakL;
+}
+
 /* ---------- Референс: закрепление и применение ---------- */
 const REF_KEY = 'generator_obojm_ref_v1';
 let reference = null; // {hue, maxVal, rows:[{hex,L}], boundaryC, boundaryLst}
@@ -472,7 +534,7 @@ function loadRef(){
 }
 
 function onPinRefChange(checked){
-  if(!checked) return; // это действие, а не переключатель состояния
+  if(!checked) return; // отмена вручную не предусмотрена — только кнопка «Очистить референс»
   if(!lastRows){ showToast('Сначала постройте ряд.'); document.getElementById('pinRefChk').checked=false; return; }
   const last = lastRows[lastRows.length-1];
   const [r,g,b] = hlsToRgb(lastHue, last.L/255, 1.0, lastMaxVal);
@@ -485,8 +547,6 @@ function onPinRefChange(checked){
   };
   saveRef();
   renderRefBlock();
-  showToast('Закреплено как референс.');
-  document.getElementById('pinRefChk').checked = false; // действие разовое, не залипает
   const applyChk = document.getElementById('applyRefChk');
   if(applyChk) applyChk.disabled = false;
 }
@@ -497,10 +557,15 @@ function clearRef(){
   renderRefBlock();
   const applyChk = document.getElementById('applyRefChk');
   if(applyChk) applyChk.disabled = true;
+  const applySafeChk = document.getElementById('applyRefSafeChk');
+  if(applySafeChk) applySafeChk.disabled = true;
 }
 
 function renderRefBlock(){
   const out = document.getElementById('refOut');
+  const pinChk = document.getElementById('pinRefChk');
+  pinChk.checked = !!reference;
+  pinChk.disabled = !!reference;
   if(!reference){
     out.innerHTML = '';
     return;
@@ -515,6 +580,12 @@ function renderRefBlock(){
 // шаг подбирается так, чтобы последняя строка легла на границу C*(hue) = reference.boundaryC
 function buildRowsByReference(hue, start, count, maxVal){
   const boundaryL = findBoundaryL(hue, reference.boundaryC, maxVal);
+  const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
+  return {rows: buildRows(hue, start, newStep, count, maxVal), step: newStep, boundaryL};
+}
+
+function buildRowsByReferenceSafe(hue, start, count, maxVal){
+  const boundaryL = findBoundaryLSafe(hue, reference.boundaryC, maxVal);
   const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
   return {rows: buildRows(hue, start, newStep, count, maxVal), step: newStep, boundaryL};
 }
