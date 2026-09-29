@@ -129,9 +129,10 @@
         <div><label>Кол-во позиций</label><input type="number" id="genCount" value="10" min="1" max="60"></div>
       </div>
       <div class="row">
-        <div style="flex:2 1 140px;"><label>Максимум канала (по умолчанию 255)</label><input type="number" id="genMax" value="255" min="1" max="255"></div>
-        <div style="flex:1 1 120px; display:flex; align-items:flex-end;">
-          <button type="button" style="width:100%;" onclick="openNamesSheet()">Список названий</button>
+        <div style="flex:0 0 80px; min-width:70px;"><label>Brightness</label><input type="number" id="genMax" value="255" min="1" max="255"></div>
+        <div style="flex:0 0 80px; min-width:70px;"><label>Saturation</label><input type="number" id="genSat" value="100" min="0" max="100"></div>
+        <div style="display:flex; align-items:flex-end;">
+          <button type="button" style="width:100%; white-space:nowrap;" onclick="openNamesSheet()">Имена hue</button>
         </div>
       </div>
       <div class="btn-row">
@@ -149,9 +150,6 @@
         Закрепить текущий ряд как референс
       </label>
       <div id="refOut"></div>
-      <div class="btn-row">
-        <button id="genAllBtn" class="primary" onclick="generateAllFromSheet()" disabled>Создать все семейства по списку</button>
-      </div>
     </div>
   </div>
 
@@ -177,6 +175,7 @@
     <div id="namesRows"></div>
     <div class="btn-row">
       <button onclick="addNameRow()">Добавить строку</button>
+      <button onclick="deleteSelectedNames()">Удалить</button>
       <button onclick="saveNamesToTxt()">Сохранить в txt</button>
       <button onclick="document.getElementById('namesFileInput').click()">Загрузить из txt</button>
       <button class="primary" onclick="closeNamesSheet()">Готово</button>
@@ -211,6 +210,9 @@ let lastRefMode = null; // null | 'safe'
 let lastRefCapped = false;
 let lastHue = null;
 let lastMaxVal = null;
+let lastSat = 1.0;
+let lastStep = null;
+let lastStepOriginal = null;
 
 let toastTimer = null;
 function showToast(msg){
@@ -269,31 +271,33 @@ function currentInputs(){
     start: parseFloat(document.getElementById('genStart').value),
     step: parseFloat(document.getElementById('genStep').value),
     count: parseInt(document.getElementById('genCount').value),
-    maxVal: parseFloat(document.getElementById('genMax').value) || 255
+    maxVal: parseFloat(document.getElementById('genMax').value) || 255,
+    sat: (parseFloat(document.getElementById('genSat').value) || 0) / 100
   };
 }
 
-function buildRows(hue, start, step, count, maxVal){
+function buildRows(hue, start, step, count, maxVal, sat){
   if(maxVal===undefined) maxVal=255;
+  if(sat===undefined) sat=1.0;
   const rows = [];
   for(let i=0;i<count;i++){
     const L = Math.round(start - step*i);
     if(L<0 || L>255) continue;
-    const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
+    const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
     rows.push({hex: toHex(r,g,b), L, real: rgbToLstar255(r,g,b), pct: pctOf(r,g,b,maxVal)});
   }
   return rows;
 }
 
-function computeSignature(hue, maxVal, rows){
-  return hue + '|' + maxVal + '|' + rows.map(r => r.hex + ':' + r.L).join(',');
+function computeSignature(hue, maxVal, rows, sat){
+  return hue + '|' + maxVal + '|' + (sat===undefined?1:sat) + '|' + rows.map(r => r.hex + ':' + r.L).join(',');
 }
 
 function buildTable(){
-  const {hue, start, step, count, maxVal} = currentInputs();
-  const rows = buildRows(hue, start, step, count, maxVal);
+  const {hue, start, step, count, maxVal, sat} = currentInputs();
+  const rows = buildRows(hue, start, step, count, maxVal, sat);
 
-  if(lastRowsOriginal && computeSignature(hue, maxVal, rows) === computeSignature(lastHue, lastMaxVal, lastRowsOriginal)){
+  if(lastRowsOriginal && computeSignature(hue, maxVal, rows, sat) === computeSignature(lastHue, lastMaxVal, lastRowsOriginal, lastSat)){
     showToast('Уже создано.');
     return;
   }
@@ -302,10 +306,13 @@ function buildTable(){
   lastRows = rows;
   lastHue = hue;
   lastMaxVal = maxVal;
+  lastSat = sat;
+  lastStep = step;
+  lastStepOriginal = step;
   lastRefMode = null;
   lastRefCapped = false;
 
-  renderTable(hue, maxVal, rows);
+  renderTable(hue, maxVal, rows, sat, step);
 
   document.getElementById('refCheckRow').classList.remove('hidden');
   const applyChk = document.getElementById('applyRefChk');
@@ -313,8 +320,9 @@ function buildTable(){
   applyChk.disabled = !reference;
 }
 
-function renderTable(hue, maxVal, rows){
-  let html = '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>%</th></tr>';
+function renderTable(hue, maxVal, rows, sat, step){
+  let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
+  html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>%</th></tr>';
   rows.forEach(r => {
     html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.pct}%</td></tr>`;
   });
@@ -323,23 +331,27 @@ function renderTable(hue, maxVal, rows){
   document.getElementById('addBtn').disabled = false;
 }
 
-function summaryLine(hue, maxVal, rows){
+function summaryLine(hue, maxVal, rows, sat, step){
   const first = rows[0], last = rows[rows.length-1];
-  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, ${first.pct}-${last.pct}%`;
+  const satPct = sat===undefined ? 100 : Math.round(sat*100);
+  const stepVal = step===undefined ? (rows.length>1 ? (rows[0].L-rows[1].L) : 0) : step;
+  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepVal.toFixed(1)}, ${first.pct}-${last.pct}%`;
 }
 
 function applyRefMode(mode){
-  const {hue, start, count, maxVal} = currentInputs();
+  const {hue, start, count, maxVal, sat} = currentInputs();
   if(mode === 'safe'){
-    const {rows, capped} = buildRowsByReferenceSafe(hue, start, count, maxVal);
+    const {rows, capped, step} = buildRowsByReferenceSafe(hue, start, count, maxVal, sat);
     lastRows = rows;
     lastRefCapped = capped;
+    lastStep = step;
   } else {
     lastRows = lastRowsOriginal;
     lastRefCapped = false;
+    lastStep = lastStepOriginal;
   }
   lastRefMode = mode;
-  renderTable(lastHue, lastMaxVal, lastRows);
+  renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
 }
 
 function onApplyRefChange(checked){
@@ -442,9 +454,11 @@ function loadSets(){
       nextId = data.nextId || (sets.reduce((m,s)=>Math.max(m,s.id),0)+1);
       sets.forEach(s => {
         if(s.maxVal === undefined) s.maxVal = 255;
+        if(s.sat === undefined) s.sat = 1.0;
+        if(s.step === undefined) s.step = (s.rows && s.rows.length>1) ? (s.rows[0].L - s.rows[1].L) : 0;
         if(s.name === undefined) s.name = '';
         if(s.capped === undefined) s.capped = false;
-        s.sig = computeSignature(s.hue, s.maxVal, s.rows);
+        s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
       });
     }
   }catch(e){
@@ -466,12 +480,12 @@ function insertSetSorted(newSet){
 
 function addSet(){
   if(!lastRows) return;
-  const sig = computeSignature(lastHue, lastMaxVal, lastRows) + (lastRefMode ? '|'+lastRefMode : '');
+  const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat) + (lastRefMode ? '|'+lastRefMode : '');
   if(sets.some(s => s.sig === sig)){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, rows: lastRows, selected:false, sig, refMode: lastRefMode, capped: lastRefMode==='safe' ? lastRefCapped : false, name: getNameForHue(lastHue)});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, refMode: lastRefMode, capped: lastRefMode==='safe' ? lastRefCapped : false, name: getNameForHue(lastHue)});
   saveSets();
   renderSets();
   showResults();
@@ -517,7 +531,7 @@ function renderSets(){
     const tag = s.refMode === 'safe'
       ? (s.capped ? ' (изменен по референсу, стоп-поправка)' : ' (изменен по референсу)')
       : '';
-    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows) + tag;
+    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     return `
       <div class="set-block">
@@ -545,8 +559,10 @@ function showSelect(){
   lastRefMode = null;
   lastHue = null;
   lastMaxVal = null;
+  lastSat = 1.0;
   document.getElementById('addBtn').disabled = true;
   document.getElementById('genMax').value = 255;
+  document.getElementById('genSat').value = 100;
   document.getElementById('refCheckRow').classList.add('hidden');
   if(sets.length){
     sets.forEach(s => s.selected = false);
@@ -578,19 +594,21 @@ function labC(r,g,b){
   return {Lst, C: Math.sqrt(a*a+bb*bb)};
 }
 // Первое L (сканируя от белого, 254→1), где C*(hue,L) достигает targetC
-function findBoundaryL(hue, targetC, maxVal){
-  const {peakL} = findPeakC(hue, maxVal);
+function findBoundaryL(hue, targetC, maxVal, sat){
+  if(sat===undefined) sat=1.0;
+  const {peakL} = findPeakC(hue, maxVal, sat);
   for(let L=254; L>=peakL; L--){
-    const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
+    const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
     if(labC(r,g,b).C >= targetC) return L;
   }
   return peakL; // цель физически недостижима для этого hue — не ныряем глубже собственного пика
 }
 
-function findPeakC(hue, maxVal){
+function findPeakC(hue, maxVal, sat){
+  if(sat===undefined) sat=1.0;
   let peakC = 0, peakL = 128;
   for(let L=254; L>=1; L--){
-    const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
+    const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
     const C = labC(r,g,b).C;
     if(C > peakC){ peakC = C; peakL = L; }
   }
@@ -602,13 +620,14 @@ const SAFE_HEADROOM_RATIO = 0.75; // не использовать больше 
 // Безопасная граница: если цель требует больше 75% пикового запаса hue,
 // останавливаемся на этой доле пика, а не на самой цели, и никогда не
 // сканируем ниже peakL (там кривая C* уже идёт вниз — туда лезть нельзя).
-function findBoundaryLSafe(hue, targetC, maxVal){
-  const {peakC, peakL} = findPeakC(hue, maxVal);
+function findBoundaryLSafe(hue, targetC, maxVal, sat){
+  if(sat===undefined) sat=1.0;
+  const {peakC, peakL} = findPeakC(hue, maxVal, sat);
   const cap = peakC * SAFE_HEADROOM_RATIO;
   const capped = targetC > cap;
   const effectiveTarget = Math.min(targetC, cap);
   for(let L=254; L>=peakL; L--){
-    const [r,g,b] = hlsToRgb(hue, L/255, 1.0, maxVal);
+    const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
     if(labC(r,g,b).C >= effectiveTarget) return {L, capped};
   }
   return {L: peakL, capped};
@@ -633,13 +652,14 @@ function onPinRefChange(checked){
   if(!checked) return; // отмена вручную не предусмотрена — только кнопка «Очистить референс»
   if(!lastRows){ showToast('Сначала постройте ряд.'); document.getElementById('pinRefChk').checked=false; return; }
   const last = lastRows[lastRows.length-1];
-  const [r,g,b] = hlsToRgb(lastHue, last.L/255, 1.0, lastMaxVal);
+  const [r,g,b] = hlsToRgb(lastHue, last.L/255, lastSat, lastMaxVal);
   const {C} = labC(r,g,b);
   reference = {
     hue: lastHue,
     maxVal: lastMaxVal,
+    sat: lastSat,
     boundaryC: C,
-    summary: summaryLine(lastHue, lastMaxVal, lastRows)
+    summary: summaryLine(lastHue, lastMaxVal, lastRows, lastSat, lastStep)
   };
   saveRef();
   renderRefBlock();
@@ -660,8 +680,6 @@ function renderRefBlock(){
   const pinChk = document.getElementById('pinRefChk');
   pinChk.checked = !!reference;
   pinChk.disabled = !!reference;
-  const genAllBtn = document.getElementById('genAllBtn');
-  if(genAllBtn) genAllBtn.disabled = !reference;
   if(!reference){
     out.innerHTML = '';
     return;
@@ -672,10 +690,11 @@ function renderRefBlock(){
   `;
 }
 
-function buildRowsByReferenceSafe(hue, start, count, maxVal){
-  const {L: boundaryL, capped} = findBoundaryLSafe(hue, reference.boundaryC, maxVal);
+function buildRowsByReferenceSafe(hue, start, count, maxVal, sat){
+  if(sat===undefined) sat=1.0;
+  const {L: boundaryL, capped} = findBoundaryLSafe(hue, reference.boundaryC, maxVal, sat);
   const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
-  return {rows: buildRows(hue, start, newStep, count, maxVal), step: newStep, boundaryL, capped};
+  return {rows: buildRows(hue, start, newStep, count, maxVal, sat), step: newStep, boundaryL, capped};
 }
 
 /* ---------- Список названий семейств (по hue) ---------- */
@@ -701,6 +720,7 @@ function sortNames(){
 }
 function openNamesSheet(){
   sortNames();
+  hueNames.forEach(n => n.selected = false);
   renderNamesSheet();
   document.getElementById('namesModal').classList.remove('hidden');
 }
@@ -711,7 +731,7 @@ function closeNamesSheet(){
   document.getElementById('namesModal').classList.add('hidden');
 }
 function addNameRow(){
-  hueNames.push({hue:0, name:''});
+  hueNames.push({hue:0, name:'', selected:false});
   saveNames();
   renderNamesSheet();
 }
@@ -720,8 +740,14 @@ function updateNameRow(idx, field, value){
   hueNames[idx][field] = field==='hue' ? (parseFloat(value)||0) : (value||'').toUpperCase();
   saveNames();
 }
-function deleteNameRow(idx){
-  hueNames.splice(idx,1);
+function toggleNameRow(idx, checked){
+  if(!hueNames[idx]) return;
+  hueNames[idx].selected = checked;
+}
+function deleteSelectedNames(){
+  const before = hueNames.length;
+  hueNames = hueNames.filter(n => !n.selected);
+  if(hueNames.length === before){ showToast('Ничего не отмечено.'); return; }
   saveNames();
   renderNamesSheet();
 }
@@ -733,9 +759,9 @@ function renderNamesSheet(){
   }
   c.innerHTML = hueNames.map((n, i) => `
     <div class="name-row">
+      <input type="checkbox" ${n.selected?'checked':''} onchange="toggleNameRow(${i}, this.checked)" title="Отметить для удаления">
       <input class="hueInput" type="number" value="${n.hue}" oninput="updateNameRow(${i},'hue',this.value)">
       <input class="nameInput" type="text" value="${n.name}" placeholder="Название" oninput="this.value=this.value.toUpperCase(); updateNameRow(${i},'name',this.value)">
-      <button class="del-x" onclick="deleteNameRow(${i})" title="Удалить строку">✕</button>
     </div>
   `).join('');
 }
@@ -774,28 +800,6 @@ function loadNamesFromTxt(file){
   reader.onerror = () => showToast('Не удалось прочитать файл.');
   reader.readAsText(file, 'utf-8');
   document.getElementById('namesFileInput').value = '';
-}
-
-function generateAllFromSheet(){
-  if(!reference){ showToast('Сначала закрепите референс.'); return; }
-  if(!hueNames.length){ showToast('Список названий пуст.'); return; }
-  const {start, count, maxVal} = currentInputs();
-  let added = 0;
-  hueNames.forEach(entry => {
-    const hue = Number(entry.hue);
-    const {rows, capped} = buildRowsByReferenceSafe(hue, start, count, maxVal);
-    const sig = computeSignature(hue, maxVal, rows) + '|safe';
-    if(sets.some(s => s.sig === sig)) return;
-    insertSetSorted({
-      id: nextId++, hue, maxVal, rows, selected:false, sig,
-      refMode:'safe', capped, name: (entry.name||'').trim()
-    });
-    added++;
-  });
-  saveSets();
-  renderSets();
-  showResults();
-  showToast(added ? `Создано семейств: ${added}` : 'Все семейства уже созданы.');
 }
 
 loadRef();
