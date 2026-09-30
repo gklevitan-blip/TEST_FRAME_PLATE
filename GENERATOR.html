@@ -11,7 +11,7 @@
 <style>
   :root{
     --bg:#141517; --panel:#1d1f22; --line:#33363b; --ink:#ececec; --dim:#9aa0a6;
-    --accent:#4f8cff;
+    --accent:#4f8cff; --ok-green:#34c759;
   }
   *{box-sizing:border-box;}
   body{
@@ -80,6 +80,7 @@
   .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; gap:10px; flex-wrap:wrap;}
   .topbar .left-actions, .topbar .right-actions{display:flex; gap:8px; flex-wrap:wrap;}
   .set-block{margin-bottom:24px;}
+  .edited-param{border:1px solid var(--accent); border-radius:4px; padding:0 4px;}
   .set-header{
     display:flex; align-items:center; gap:8px;
     font-size:13px; color:#ccc; font-family:ui-monospace,Menlo,monospace; margin-bottom:6px;
@@ -107,7 +108,7 @@
   .name-row .nameInput{flex:1;}
 
   .toast{
-    position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(10px);
+    position:fixed; left:50%; top:24px; transform:translateX(-50%) translateY(-10px);
     background:#2a2d33; color:var(--ink); border:1px solid var(--line); border-radius:8px;
     padding:10px 16px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.4);
     opacity:0; transition:opacity .2s ease, transform .2s ease; pointer-events:none; z-index:9999;
@@ -169,34 +170,45 @@
   <div class="modal-box">
     <div class="topbar" style="margin-bottom:12px;">
       <h2>Список названий семейств (по hue)</h2>
-      <button class="del-x" onclick="closeNamesSheet()" title="Закрыть">✕</button>
+      <button onclick="closeNamesSheet()">Закрыть</button>
     </div>
     <div class="hint" style="margin:0 0 10px;">Название присваивается семейству на экране результатов и используется как имя txt-файла.</div>
     <div id="namesRows"></div>
-    <div class="btn-row">
+    <div class="btn-row" style="margin-top:22px;">
       <button onclick="addNameRow()">Добавить строку</button>
-      <button onclick="deleteSelectedNames()">Удалить</button>
       <button onclick="saveNamesToTxt()">Сохранить в txt</button>
       <button onclick="document.getElementById('namesFileInput').click()">Загрузить из txt</button>
+    </div>
+    <div class="btn-row" style="justify-content:space-between; margin-top:18px;">
       <button class="primary" onclick="closeNamesSheet()">Готово</button>
+      <button onclick="deleteSelectedNames()">Удалить отмеченное</button>
     </div>
     <input type="file" id="namesFileInput" accept=".txt" class="hidden" onchange="loadNamesFromTxt(this.files[0])">
-    <div class="hint" style="margin-top:8px;">Формат файла: на каждой строке «hue Название», например «40 Терракота». Загрузка полностью заменяет текущий список.</div>
   </div>
 </div>
 
 <div class="screen hidden" id="resultScreen">
   <div class="topbar">
     <div class="left-actions">
-      <button onclick="showSelect()">Вернуться к выбору</button>
+      <button onclick="showSelect()" title="Вернуться к выбору" style="font-size:18px; line-height:1; padding:9px 16px;">↩</button>
+    </div>
+    <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
+      <label style="display:inline; margin:0; white-space:nowrap;">Start</label>
+      <input type="number" id="editStartVal" placeholder="L" min="0" max="255" style="width:64px;" disabled>
+      <label style="display:inline; margin:0; white-space:nowrap;">Step</label>
+      <input type="number" id="editStepVal" placeholder="Δ" step="0.1" style="width:64px;" disabled>
+      <label style="display:inline; margin:0; white-space:nowrap;">Saturation</label>
+      <input type="number" id="editSatVal" placeholder="%" min="0" max="100" style="width:64px;" disabled>
+      <button id="applyEditsBtn" onclick="applyEdits()" style="background:var(--accent); border-color:var(--accent); color:#fff;" disabled>Применить</button>
+      <button id="saveEditsBtn" onclick="saveEdits()" style="background:var(--ok-green); border-color:var(--ok-green); color:#fff; width:38px; padding:9px 0; border-radius:8px;" disabled>OK</button>
     </div>
     <div class="right-actions">
       <button id="selectAllBtn" onclick="selectAllSets()">Выбрать все</button>
-      <button onclick="downloadSelectedTxt()">Создать txt файл</button>
+      <button onclick="downloadSelectedTxt()">Создать txt</button>
       <button onclick="clearAll()">Очистить</button>
     </div>
   </div>
-  <div id="setsContainer"></div>
+  <div id="setsContainer" style="margin-top:19px;"></div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -331,11 +343,16 @@ function renderTable(hue, maxVal, rows, sat, step){
   document.getElementById('addBtn').disabled = false;
 }
 
-function summaryLine(hue, maxVal, rows, sat, step){
+function summaryLine(hue, maxVal, rows, sat, step, edited){
+  edited = edited || {};
   const first = rows[0], last = rows[rows.length-1];
   const satPct = sat===undefined ? 100 : Math.round(sat*100);
   const stepVal = step===undefined ? (rows.length>1 ? (rows[0].L-rows[1].L) : 0) : step;
-  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepVal.toFixed(1)}, ${first.pct}-${last.pct}%`;
+  const wrap = (txt, on) => on ? `<span class="edited-param">${txt}</span>` : txt;
+  const lPart = wrap(`L ${first.L}-${last.L}`, edited.start);
+  const satPart = wrap(`S=${satPct}%`, edited.sat);
+  const stepPart = wrap(`шаг=${stepVal.toFixed(1)}`, edited.step);
+  return `hue=${hue}, ${lPart}, MAX=${maxVal}, ${satPart}, ${stepPart}, ${first.pct}-${last.pct}%`;
 }
 
 function applyRefMode(mode){
@@ -491,15 +508,121 @@ function addSet(){
   showResults();
 }
 
+let editSession = null; // {id, rows, step, sat} — точный бэкап на момент выбора строки, до любого «Применить»
+
 function toggleSelect(id, checked){
   const s = sets.find(s=>s.id===id);
-  if(s){ s.selected = checked; saveSets(); }
+  if(s){ s.selected = checked; }
+  refreshEditBoxes(); // может откатить незакоммиченное превью до saveSets() ниже
+  saveSets();
   updateSelectAllBtn();
 }
+
+// Откатывает незакоммиченное превью (если было) к состоянию на момент
+// выбора строки — используется при снятии галки/переключении без OK.
+function discardPendingEdit(){
+  if(!editSession) return;
+  const s = sets.find(x => x.id === editSession.id);
+  if(s){
+    s.rows = editSession.rows.map(r => ({...r}));
+    s.step = editSession.step;
+    s.sat = editSession.sat;
+    s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+  }
+  editSession = null;
+}
+
+// Заполняет Start/Step/Saturation текущими значениями строки, только если
+// отмечена ровно одна. Если отметка снята/сменилась без OK — откатывает
+// незакоммиченное превью прежней строки.
+function refreshEditBoxes(){
+  const chosen = sets.filter(s => s.selected);
+  const startEl = document.getElementById('editStartVal');
+  const stepEl = document.getElementById('editStepVal');
+  const satEl = document.getElementById('editSatVal');
+  const applyBtn = document.getElementById('applyEditsBtn');
+  const saveBtn = document.getElementById('saveEditsBtn');
+  if(chosen.length === 1){
+    const s = chosen[0];
+    if(!editSession || editSession.id !== s.id){
+      discardPendingEdit(); // если висела правка другой строки — откатить её
+      editSession = { id: s.id, rows: s.rows.map(r => ({...r})), step: s.step, sat: s.sat };
+    }
+    startEl.value = s.rows[0].L;
+    stepEl.value = s.step.toFixed(1);
+    satEl.value = Math.round(s.sat*100);
+    startEl.disabled = false; stepEl.disabled = false; satEl.disabled = false;
+    applyBtn.disabled = false; saveBtn.disabled = false;
+  } else {
+    discardPendingEdit();
+    startEl.value = '';
+    stepEl.value = '';
+    satEl.value = '';
+    startEl.disabled = true; stepEl.disabled = true; satEl.disabled = true;
+    applyBtn.disabled = true; saveBtn.disabled = true;
+  }
+}
+
+function getSingleSelected(){
+  const chosen = sets.filter(s => s.selected);
+  if(chosen.length === 0){ showToast('Отметьте чекбоксом одну полосу для этого действия.'); return null; }
+  if(chosen.length > 1){ showToast('Должна быть отмечена только одна полоса.'); return null; }
+  return chosen[0];
+}
+
+// Живой пересчёт: Start/Step/Saturation применяются вместе, строится новый
+// ряд. Не трогает localStorage — оригинал цел в editSession до OK или до
+// снятия галки (тогда откатится автоматически).
+function applyEdits(){
+  const s = getSingleSelected();
+  if(!s) return;
+  const rawStart = document.getElementById('editStartVal').value;
+  const rawStep = document.getElementById('editStepVal').value;
+  const rawSat = document.getElementById('editSatVal').value;
+  if(rawStart==='' || rawStep==='' || rawSat===''){ showToast('Заполните Start, Step и Saturation.'); return; }
+  const newStart = parseFloat(rawStart);
+  const newStep = parseFloat(rawStep);
+  const newSat = (parseFloat(rawSat) || 0) / 100;
+  const count = s.rows.length;
+  const newRows = [];
+  for(let i=0;i<count;i++){
+    const L = Math.round(newStart - newStep*i);
+    if(L<0 || L>255) continue;
+    const [rr,gg,bb] = hlsToRgb(s.hue, L/255, newSat, s.maxVal);
+    newRows.push({hex: toHex(rr,gg,bb), L, real: rgbToLstar255(rr,gg,bb), pct: pctOf(rr,gg,bb,s.maxVal)});
+  }
+  if(!newRows.length){ showToast('Start/Step не дают ни одной позиции в диапазоне 0-255.'); return; }
+  s.rows = newRows;
+  s.step = newStep;
+  s.sat = newSat;
+  s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+  renderSets();
+}
+
+// OK — фиксирует текущее превью насовсем (без отката), считает,
+// какие именно параметры реально изменились относительно editSession.
+function saveEdits(){
+  const s = getSingleSelected();
+  if(!s) return;
+  if(editSession && editSession.id === s.id){
+    s.editedStart = s.rows[0].L !== editSession.rows[0].L;
+    s.editedStep = Math.abs(s.step - editSession.step) > 0.001;
+    s.editedSat = Math.abs(s.sat - editSession.sat) > 0.0001;
+  }
+  editSession = null; // коммит — откатывать больше нечего
+  s.selected = false;
+  saveSets();
+  renderSets();
+  updateSelectAllBtn();
+  clearEditBoxesUI();
+  showToast('Изменения сохранены.');
+}
+
 function selectAllSets(){
   if(!sets.length) return;
   const allSelected = sets.every(s => s.selected);
   sets.forEach(s => s.selected = !allSelected);
+  refreshEditBoxes(); // откатит незакоммиченное превью раньше saveSets()
   saveSets();
   renderSets();
 }
@@ -531,29 +654,50 @@ function renderSets(){
     const tag = s.refMode === 'safe'
       ? (s.capped ? ' (изменен по референсу, стоп-поправка)' : ' (изменен по референсу)')
       : '';
-    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step) + tag;
+    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {start: s.editedStart, step: s.editedStep, sat: s.editedSat}) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     return `
       <div class="set-block">
         <div class="set-header">
           <input type="checkbox" ${s.selected?'checked':''} onchange="toggleSelect(${s.id}, this.checked)">
-          <span class="set-header-text">${header}</span>
+          <span class="set-header-text" id="header-${s.id}">${header}</span>
           <button class="del-x" onclick="deleteOne(${s.id})" title="Удалить эту полоску">✕</button>
         </div>
-        <div class="strip">${strip}</div>
+        <div class="strip" id="strip-${s.id}">${strip}</div>
       </div>
     `;
   }).join('');
   updateSelectAllBtn();
 }
 
+function clearEditBoxesUI(){
+  const ids = ['editStartVal','editStepVal','editSatVal'];
+  ids.forEach(id => { const el = document.getElementById(id); el.value=''; el.disabled=true; });
+  document.getElementById('applyEditsBtn').disabled = true;
+  document.getElementById('saveEditsBtn').disabled = true;
+}
+
+// Для переходов между экранами: откатывает незакоммиченное превью (если
+// есть) и очищает поля. На практике сюда почти не доходит — уход со второй
+// страницы уже блокируется, пока есть отмеченный чекбокс.
+function clearEditBoxes(){
+  discardPendingEdit();
+  clearEditBoxesUI();
+}
+
 function showResults(){
   document.getElementById('selectScreen').classList.add('hidden');
   document.getElementById('resultScreen').classList.remove('hidden');
+  clearEditBoxes();
 }
 function showSelect(){
+  if(sets.some(s => s.selected)){
+    showToast('Сначала решите, что делать с отмеченной полосой — снимите галку.');
+    return;
+  }
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('selectScreen').classList.remove('hidden');
+  clearEditBoxes();
   lastRows = null;
   lastRowsOriginal = null;
   lastRefMode = null;
@@ -564,10 +708,6 @@ function showSelect(){
   document.getElementById('genMax').value = 255;
   document.getElementById('genSat').value = 100;
   document.getElementById('refCheckRow').classList.add('hidden');
-  if(sets.length){
-    sets.forEach(s => s.selected = false);
-    saveSets();
-  }
   document.getElementById('applyRefChk').checked = false;
 }
 
