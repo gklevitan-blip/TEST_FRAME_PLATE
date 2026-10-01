@@ -187,6 +187,16 @@
   </div>
 </div>
 
+<div id="clearConfirmModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="hint" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Удалить все построенные семейства без возможности отмены?</div>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button onclick="closeClearConfirm()">Отмена</button>
+      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="clearAll()">Очистить</button>
+    </div>
+  </div>
+</div>
+
 <div class="screen hidden" id="resultScreen">
   <div class="topbar">
     <div class="left-actions">
@@ -194,21 +204,21 @@
     </div>
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
       <label style="display:inline; margin:0; white-space:nowrap;">Start</label>
-      <input type="number" id="editStartVal" placeholder="L" min="0" max="255" style="width:64px;" disabled>
+      <input type="number" id="editStartVal" placeholder="L" min="0" max="255" style="width:64px;" disabled onblur="onEditFieldBlur()">
       <label style="display:inline; margin:0; white-space:nowrap;">Step</label>
-      <input type="number" id="editStepVal" placeholder="Δ" step="0.1" style="width:64px;" disabled>
+      <input type="number" id="editStepVal" placeholder="Δ" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
       <label style="display:inline; margin:0; white-space:nowrap;">Saturation</label>
-      <input type="number" id="editSatVal" placeholder="%" min="0" max="100" style="width:64px;" disabled>
+      <input type="number" id="editSatVal" placeholder="%" min="0" max="100" style="width:64px;" disabled onblur="onEditFieldBlur()">
       <button id="applyEditsBtn" onclick="applyEdits()" style="background:var(--accent); border-color:var(--accent); color:#fff;" disabled>Применить</button>
       <button id="saveEditsBtn" onclick="saveEdits()" style="background:var(--ok-green); border-color:var(--ok-green); color:#fff; width:38px; padding:9px 0; border-radius:8px;" disabled>OK</button>
     </div>
     <div class="right-actions">
       <button id="selectAllBtn" onclick="selectAllSets()">Выбрать все</button>
       <button onclick="downloadSelectedTxt()">Создать txt</button>
-      <button onclick="clearAll()">Очистить</button>
+      <button id="clearAllBtn" onclick="confirmClearAll()" disabled>Очистить</button>
     </div>
   </div>
-  <div id="setsContainer" style="margin-top:19px;"></div>
+  <div id="setsContainer" style="margin-top:38px;"></div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -219,7 +229,6 @@ let nextId = 1;
 let lastRows = null;
 let lastRowsOriginal = null;
 let lastRefMode = null; // null | 'safe'
-let lastRefCapped = false;
 let lastHue = null;
 let lastMaxVal = null;
 let lastSat = 1.0;
@@ -322,7 +331,6 @@ function buildTable(){
   lastStep = step;
   lastStepOriginal = step;
   lastRefMode = null;
-  lastRefCapped = false;
 
   renderTable(hue, maxVal, rows, sat, step);
 
@@ -358,13 +366,11 @@ function summaryLine(hue, maxVal, rows, sat, step, edited){
 function applyRefMode(mode){
   const {hue, start, count, maxVal, sat} = currentInputs();
   if(mode === 'safe'){
-    const {rows, capped, step} = buildRowsByReferenceSafe(hue, start, count, maxVal, sat);
+    const {rows, step} = buildRowsByReferenceSafe(hue, start, count, maxVal, sat);
     lastRows = rows;
-    lastRefCapped = capped;
     lastStep = step;
   } else {
     lastRows = lastRowsOriginal;
-    lastRefCapped = false;
     lastStep = lastStepOriginal;
   }
   lastRefMode = mode;
@@ -474,7 +480,6 @@ function loadSets(){
         if(s.sat === undefined) s.sat = 1.0;
         if(s.step === undefined) s.step = (s.rows && s.rows.length>1) ? (s.rows[0].L - s.rows[1].L) : 0;
         if(s.name === undefined) s.name = '';
-        if(s.capped === undefined) s.capped = false;
         s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
       });
     }
@@ -502,7 +507,7 @@ function addSet(){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, refMode: lastRefMode, capped: lastRefMode==='safe' ? lastRefCapped : false, name: getNameForHue(lastHue)});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, refMode: lastRefMode, name: getNameForHue(lastHue)});
   saveSets();
   renderSets();
   showResults();
@@ -515,7 +520,7 @@ function toggleSelect(id, checked){
   if(s){ s.selected = checked; }
   refreshEditBoxes(); // может откатить незакоммиченное превью до saveSets() ниже
   saveSets();
-  updateSelectAllBtn();
+  renderSets(); // уже вызывает updateSelectAllBtn() внутри
 }
 
 // Откатывает незакоммиченное превью (если было) к состоянию на момент
@@ -573,6 +578,20 @@ function getSingleSelected(){
 // Живой пересчёт: Start/Step/Saturation применяются вместе, строится новый
 // ряд. Не трогает localStorage — оригинал цел в editSession до OK или до
 // снятия галки (тогда откатится автоматически).
+// Срабатывает на blur каждого из трёх полей. Если фокус ушёл не на
+// соседнее поле группы (а значит клавиатура реально закрылась/ушли
+// в другое место экрана) — дублирует «Применить».
+function onEditFieldBlur(){
+  setTimeout(() => {
+    const groupIds = ['editStartVal','editStepVal','editSatVal'];
+    const active = document.activeElement;
+    if(active && groupIds.includes(active.id)) return; // переход между своими полями — не трогаем
+    if(!document.getElementById('applyEditsBtn').disabled){
+      applyEdits();
+    }
+  }, 0);
+}
+
 function applyEdits(){
   const s = getSingleSelected();
   if(!s) return;
@@ -625,6 +644,9 @@ function selectAllSets(){
   refreshEditBoxes(); // откатит незакоммиченное превью раньше saveSets()
   saveSets();
   renderSets();
+  if(!allSelected){ // это был клик «Выбрать все» — разблокируем «Очистить»
+    document.getElementById('clearAllBtn').disabled = false;
+  }
 }
 function updateSelectAllBtn(){
   const btn = document.getElementById('selectAllBtn');
@@ -637,10 +659,17 @@ function deleteOne(id){
   saveSets();
   renderSets();
 }
+function confirmClearAll(){
+  document.getElementById('clearConfirmModal').classList.remove('hidden');
+}
+function closeClearConfirm(){
+  document.getElementById('clearConfirmModal').classList.add('hidden');
+}
 function clearAll(){
   sets = [];
   saveSets();
   renderSets();
+  closeClearConfirm();
 }
 
 function renderSets(){
@@ -651,9 +680,7 @@ function renderSets(){
     return;
   }
   container.innerHTML = sets.map((s) => {
-    const tag = s.refMode === 'safe'
-      ? (s.capped ? ' (изменен по референсу, стоп-поправка)' : ' (изменен по референсу)')
-      : '';
+    const tag = s.refMode === 'safe' ? ' (изменен по референсу)' : '';
     const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {start: s.editedStart, step: s.editedStep, sat: s.editedSat}) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     return `
@@ -755,24 +782,6 @@ function findPeakC(hue, maxVal, sat){
   return {peakC, peakL};
 }
 
-const SAFE_HEADROOM_RATIO = 0.75; // не использовать больше 75% пикового запаса C* для hue
-
-// Безопасная граница: если цель требует больше 75% пикового запаса hue,
-// останавливаемся на этой доле пика, а не на самой цели, и никогда не
-// сканируем ниже peakL (там кривая C* уже идёт вниз — туда лезть нельзя).
-function findBoundaryLSafe(hue, targetC, maxVal, sat){
-  if(sat===undefined) sat=1.0;
-  const {peakC, peakL} = findPeakC(hue, maxVal, sat);
-  const cap = peakC * SAFE_HEADROOM_RATIO;
-  const capped = targetC > cap;
-  const effectiveTarget = Math.min(targetC, cap);
-  for(let L=254; L>=peakL; L--){
-    const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
-    if(labC(r,g,b).C >= effectiveTarget) return {L, capped};
-  }
-  return {L: peakL, capped};
-}
-
 /* ---------- Референс: закрепление и применение ---------- */
 const REF_KEY = 'generator_obojm_ref_v1';
 let reference = null; // {hue, maxVal, rows:[{hex,L}], boundaryC, boundaryLst}
@@ -832,9 +841,9 @@ function renderRefBlock(){
 
 function buildRowsByReferenceSafe(hue, start, count, maxVal, sat){
   if(sat===undefined) sat=1.0;
-  const {L: boundaryL, capped} = findBoundaryLSafe(hue, reference.boundaryC, maxVal, sat);
+  const boundaryL = findBoundaryL(hue, reference.boundaryC, maxVal, sat);
   const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
-  return {rows: buildRows(hue, start, newStep, count, maxVal, sat), step: newStep, boundaryL, capped};
+  return {rows: buildRows(hue, start, newStep, count, maxVal, sat), step: newStep, boundaryL};
 }
 
 /* ---------- Список названий семейств (по hue) ---------- */
