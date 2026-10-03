@@ -91,7 +91,7 @@
     display:flex; align-items:center; justify-content:center;
     font-size:13px; line-height:1; border-radius:4px;
   }
-  .strip{display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line);}
+  .strip{cursor:pointer; display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line);}
   .strip > div{flex:1; min-width:0; height:64px;}
 
   .modal-overlay{
@@ -126,8 +126,12 @@
         <div><label>Старт L</label><input type="number" id="genStart" value="241"></div>
       </div>
       <div class="row">
-        <div><label>Шаг</label><input type="number" id="genStep" value="6" step="0.1"></div>
-        <div><label>Кол-во позиций</label><input type="number" id="genCount" value="10" min="1" max="60"></div>
+        <div><label>Шаг</label><input type="number" id="genStep" value="8" step="0.1"></div>
+        <div><label>Кол-во позиций</label><input type="number" id="genCount" value="8" min="1" max="60"></div>
+      </div>
+      <div class="row">
+        <div><label>Start C*</label><input type="number" id="genStartC" placeholder="—" min="0" step="0.1"></div>
+        <div><label>End C*</label><input type="number" id="genEndC" placeholder="—" min="0" step="0.1"></div>
       </div>
       <div class="row">
         <div style="flex:0 0 80px; min-width:70px;"><label>Brightness</label><input type="number" id="genMax" value="255" min="1" max="255"></div>
@@ -203,12 +207,10 @@
       <button onclick="showSelect()" title="Вернуться к выбору" style="font-size:18px; line-height:1; padding:9px 16px;">↩</button>
     </div>
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
-      <label style="display:inline; margin:0; white-space:nowrap;">Start</label>
-      <input type="number" id="editStartVal" placeholder="L" min="0" max="255" style="width:64px;" disabled onblur="onEditFieldBlur()">
-      <label style="display:inline; margin:0; white-space:nowrap;">Step</label>
-      <input type="number" id="editStepVal" placeholder="Δ" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
-      <label style="display:inline; margin:0; white-space:nowrap;">Saturation</label>
-      <input type="number" id="editSatVal" placeholder="%" min="0" max="100" style="width:64px;" disabled onblur="onEditFieldBlur()">
+      <label style="display:inline; margin:0; white-space:nowrap;">Start C*</label>
+      <input type="number" id="editStartCVal" placeholder="C*" min="0" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
+      <label style="display:inline; margin:0; white-space:nowrap;">End C*</label>
+      <input type="number" id="editEndCVal" placeholder="C*" min="0" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
       <button id="applyEditsBtn" onclick="applyEdits()" style="background:var(--accent); border-color:var(--accent); color:#fff;" disabled>Применить</button>
       <button id="saveEditsBtn" onclick="saveEdits()" style="background:var(--ok-green); border-color:var(--ok-green); color:#fff; width:38px; padding:9px 0; border-radius:8px;" disabled>OK</button>
     </div>
@@ -293,8 +295,23 @@ function currentInputs(){
     step: parseFloat(document.getElementById('genStep').value),
     count: parseInt(document.getElementById('genCount').value),
     maxVal: parseFloat(document.getElementById('genMax').value) || 255,
-    sat: (parseFloat(document.getElementById('genSat').value) || 0) / 100
+    sat: (parseFloat(document.getElementById('genSat').value) || 0) / 100,
+    startC: parseFloat(document.getElementById('genStartC').value),
+    endC: parseFloat(document.getElementById('genEndC').value)
   };
+}
+
+// HSL L (целое), при котором C* ближе всего к targetC: первое L от белого, где C* достигает цели.
+function lFromC(hue, targetC, maxVal, sat){
+  const {peakL} = findPeakC(hue, maxVal, sat);
+  const cOf = L => { const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal); return labC(r,g,b).C; };
+  for(let L=254; L>=peakL; L--){
+    if(cOf(L) >= targetC){
+      if(L < 254 && Math.abs(cOf(L+1)-targetC) < Math.abs(cOf(L)-targetC)) L = L+1;
+      return {L, unreachable:false};
+    }
+  }
+  return {L: peakL, unreachable:true}; // цель недостижима для этого hue — берём собственный пик
 }
 
 function buildRows(hue, start, step, count, maxVal, sat){
@@ -305,7 +322,7 @@ function buildRows(hue, start, step, count, maxVal, sat){
     const L = Math.round(start - step*i);
     if(L<0 || L>255) continue;
     const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
-    rows.push({hex: toHex(r,g,b), L, real: rgbToLstar255(r,g,b), pct: pctOf(r,g,b,maxVal)});
+    rows.push({hex: toHex(r,g,b), L, real: rgbToLstar255(r,g,b), C: labC(r,g,b).C, pct: pctOf(r,g,b,maxVal)});
   }
   return rows;
 }
@@ -315,7 +332,23 @@ function computeSignature(hue, maxVal, rows, sat){
 }
 
 function buildTable(){
-  const {hue, start, step, count, maxVal, sat} = currentInputs();
+  let {hue, start, step, count, maxVal, sat, startC, endC} = currentInputs();
+  if(!isNaN(startC)){
+    const res = lFromC(hue, startC, maxVal, sat);
+    start = res.L;
+    document.getElementById('genStart').value = start;
+    if(res.unreachable) showToast('Start C* недостижима для этого hue — взят максимум.');
+  }
+  if(!isNaN(endC) && count > 1){
+    const res = lFromC(hue, endC, maxVal, sat);
+    if(res.L >= start){
+      showToast('End C* должна быть больше C* первой позиции.');
+      return;
+    }
+    step = Number(((start - res.L) / (count - 1)).toFixed(2));
+    document.getElementById('genStep').value = step;
+    if(res.unreachable) showToast('End C* недостижима для этого hue — взят максимум.');
+  }
   const rows = buildRows(hue, start, step, count, maxVal, sat);
 
   if(lastRowsOriginal && computeSignature(hue, maxVal, rows, sat) === computeSignature(lastHue, lastMaxVal, lastRowsOriginal, lastSat)){
@@ -342,9 +375,9 @@ function buildTable(){
 
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>%</th></tr>';
+  html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th></tr>';
   rows.forEach(r => {
-    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.pct}%</td></tr>`;
+    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td></tr>`;
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
@@ -357,10 +390,8 @@ function summaryLine(hue, maxVal, rows, sat, step, edited){
   const satPct = sat===undefined ? 100 : Math.round(sat*100);
   const stepVal = step===undefined ? (rows.length>1 ? (rows[0].L-rows[1].L) : 0) : step;
   const wrap = (txt, on) => on ? `<span class="edited-param">${txt}</span>` : txt;
-  const lPart = wrap(`L ${first.L}-${last.L}`, edited.start);
-  const satPart = wrap(`S=${satPct}%`, edited.sat);
-  const stepPart = wrap(`шаг=${stepVal.toFixed(1)}`, edited.step);
-  return `hue=${hue}, ${lPart}, MAX=${maxVal}, ${satPart}, ${stepPart}, ${first.pct}-${last.pct}%`;
+  const cPart = `C* ${wrap(Math.round(first.C), edited.startC)}-${wrap(Math.round(last.C), edited.endC)}`;
+  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepVal.toFixed(1)}, ${cPart}, ${first.pct}-${last.pct}%`;
 }
 
 function applyRefMode(mode){
@@ -480,6 +511,12 @@ function loadSets(){
         if(s.sat === undefined) s.sat = 1.0;
         if(s.step === undefined) s.step = (s.rows && s.rows.length>1) ? (s.rows[0].L - s.rows[1].L) : 0;
         if(s.name === undefined) s.name = '';
+        s.rows.forEach(r => {
+          if(r.C === undefined){
+            const rr = parseInt(r.hex.slice(0,2),16), gg = parseInt(r.hex.slice(2,4),16), bb = parseInt(r.hex.slice(4,6),16);
+            r.C = labC(rr,gg,bb).C;
+          }
+        });
         s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
       });
     }
@@ -542,9 +579,8 @@ function discardPendingEdit(){
 // незакоммиченное превью прежней строки.
 function refreshEditBoxes(){
   const chosen = sets.filter(s => s.selected);
-  const startEl = document.getElementById('editStartVal');
-  const stepEl = document.getElementById('editStepVal');
-  const satEl = document.getElementById('editSatVal');
+  const startEl = document.getElementById('editStartCVal');
+  const endEl = document.getElementById('editEndCVal');
   const applyBtn = document.getElementById('applyEditsBtn');
   const saveBtn = document.getElementById('saveEditsBtn');
   if(chosen.length === 1){
@@ -553,17 +589,15 @@ function refreshEditBoxes(){
       discardPendingEdit(); // если висела правка другой строки — откатить её
       editSession = { id: s.id, rows: s.rows.map(r => ({...r})), step: s.step, sat: s.sat };
     }
-    startEl.value = s.rows[0].L;
-    stepEl.value = s.step.toFixed(1);
-    satEl.value = Math.round(s.sat*100);
-    startEl.disabled = false; stepEl.disabled = false; satEl.disabled = false;
+    startEl.value = s.rows[0].C.toFixed(1);
+    endEl.value = s.rows[s.rows.length-1].C.toFixed(1);
+    startEl.disabled = false; endEl.disabled = false;
     applyBtn.disabled = false; saveBtn.disabled = false;
   } else {
     discardPendingEdit();
     startEl.value = '';
-    stepEl.value = '';
-    satEl.value = '';
-    startEl.disabled = true; stepEl.disabled = true; satEl.disabled = true;
+    endEl.value = '';
+    startEl.disabled = true; endEl.disabled = true;
     applyBtn.disabled = true; saveBtn.disabled = true;
   }
 }
@@ -583,7 +617,7 @@ function getSingleSelected(){
 // в другое место экрана) — дублирует «Применить».
 function onEditFieldBlur(){
   setTimeout(() => {
-    const groupIds = ['editStartVal','editStepVal','editSatVal'];
+    const groupIds = ['editStartCVal','editEndCVal'];
     const active = document.activeElement;
     if(active && groupIds.includes(active.id)) return; // переход между своими полями — не трогаем
     if(!document.getElementById('applyEditsBtn').disabled){
@@ -595,26 +629,22 @@ function onEditFieldBlur(){
 function applyEdits(){
   const s = getSingleSelected();
   if(!s) return;
-  const rawStart = document.getElementById('editStartVal').value;
-  const rawStep = document.getElementById('editStepVal').value;
-  const rawSat = document.getElementById('editSatVal').value;
-  if(rawStart==='' || rawStep==='' || rawSat===''){ showToast('Заполните Start, Step и Saturation.'); return; }
-  const newStart = parseFloat(rawStart);
-  const newStep = parseFloat(rawStep);
-  const newSat = (parseFloat(rawSat) || 0) / 100;
+  const rawStart = document.getElementById('editStartCVal').value;
+  const rawEnd = document.getElementById('editEndCVal').value;
+  if(rawStart==='' || rawEnd===''){ showToast('Заполните Start C* и End C*.'); return; }
   const count = s.rows.length;
-  const newRows = [];
-  for(let i=0;i<count;i++){
-    const L = Math.round(newStart - newStep*i);
-    if(L<0 || L>255) continue;
-    const [rr,gg,bb] = hlsToRgb(s.hue, L/255, newSat, s.maxVal);
-    newRows.push({hex: toHex(rr,gg,bb), L, real: rgbToLstar255(rr,gg,bb), pct: pctOf(rr,gg,bb,s.maxVal)});
-  }
-  if(!newRows.length){ showToast('Start/Step не дают ни одной позиции в диапазоне 0-255.'); return; }
+  const a = lFromC(s.hue, parseFloat(rawStart), s.maxVal, s.sat);
+  const b = lFromC(s.hue, parseFloat(rawEnd), s.maxVal, s.sat);
+  if(count > 1 && b.L >= a.L){ showToast('End C* должна быть больше Start C*.'); return; }
+  const newStep = count > 1 ? Number(((a.L - b.L) / (count - 1)).toFixed(2)) : 0;
+  const newRows = buildRows(s.hue, a.L, newStep, count, s.maxVal, s.sat);
+  if(!newRows.length){ showToast('Такие Start C* и End C* не дают ни одной позиции.'); return; }
+  if(a.unreachable || b.unreachable) showToast('Такая C* недостижима для этого hue — взят максимум.');
   s.rows = newRows;
   s.step = newStep;
-  s.sat = newSat;
   s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+  document.getElementById('editStartCVal').value = newRows[0].C.toFixed(1);
+  document.getElementById('editEndCVal').value = newRows[newRows.length-1].C.toFixed(1);
   renderSets();
 }
 
@@ -624,9 +654,8 @@ function saveEdits(){
   const s = getSingleSelected();
   if(!s) return;
   if(editSession && editSession.id === s.id){
-    s.editedStart = s.rows[0].L !== editSession.rows[0].L;
-    s.editedStep = Math.abs(s.step - editSession.step) > 0.001;
-    s.editedSat = Math.abs(s.sat - editSession.sat) > 0.0001;
+    s.editedStartC = s.rows[0].L !== editSession.rows[0].L;
+    s.editedEndC = s.rows[s.rows.length-1].L !== editSession.rows[editSession.rows.length-1].L;
   }
   editSession = null; // коммит — откатывать больше нечего
   s.selected = false;
@@ -672,6 +701,18 @@ function clearAll(){
   closeClearConfirm();
 }
 
+let expandedSets = new Set();
+
+function detailTable(rows){
+  const lines = rows.map(r => `${r.hex}  L=${r.L}`).join('\n');
+  return `<div style="margin-top:8px; font-family:monospace; font-size:13px; line-height:1.5; white-space:pre;">${lines}</div>`;
+}
+
+function toggleDetail(id){
+  if(expandedSets.has(id)) expandedSets.delete(id); else expandedSets.add(id);
+  renderSets();
+}
+
 function renderSets(){
   const container = document.getElementById('setsContainer');
   if(!sets.length){
@@ -681,8 +722,9 @@ function renderSets(){
   }
   container.innerHTML = sets.map((s) => {
     const tag = s.refMode === 'safe' ? ' (изменен по референсу)' : '';
-    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {start: s.editedStart, step: s.editedStep, sat: s.editedSat}) + tag;
+    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
+    const detail = expandedSets.has(s.id) ? detailTable(s.rows) : '';
     return `
       <div class="set-block">
         <div class="set-header">
@@ -690,7 +732,8 @@ function renderSets(){
           <span class="set-header-text" id="header-${s.id}">${header}</span>
           <button class="del-x" onclick="deleteOne(${s.id})" title="Удалить эту полоску">✕</button>
         </div>
-        <div class="strip" id="strip-${s.id}">${strip}</div>
+        <div class="strip" id="strip-${s.id}" onclick="toggleDetail(${s.id})">${strip}</div>
+        ${detail}
       </div>
     `;
   }).join('');
@@ -698,7 +741,7 @@ function renderSets(){
 }
 
 function clearEditBoxesUI(){
-  const ids = ['editStartVal','editStepVal','editSatVal'];
+  const ids = ['editStartCVal','editEndCVal'];
   ids.forEach(id => { const el = document.getElementById(id); el.value=''; el.disabled=true; });
   document.getElementById('applyEditsBtn').disabled = true;
   document.getElementById('saveEditsBtn').disabled = true;
