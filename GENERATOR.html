@@ -514,7 +514,9 @@ function onApplyRefChange(checked){
 }
 
 function rowsToText(rows){
-  return rows.map(r => `${r.hex}  L=${r.L} C° ${Math.round(r.C)}`).join('\n') + '\n';
+  const lw = Math.max(...rows.map(r => `L=${r.L}`.length));
+  const cw = Math.max(...rows.map(r => String(Math.round(r.C)).length));
+  return rows.map(r => `${r.hex}  ${('L=' + r.L).padEnd(lw)}  C° ${String(Math.round(r.C)).padStart(cw)}`).join('\n') + '\n';
 }
 function triggerDownload(filename, text){
   const blob = new Blob([text], {type:'text/plain'});
