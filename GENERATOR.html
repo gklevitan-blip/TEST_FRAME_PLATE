@@ -122,8 +122,8 @@
   <div id="leftCol">
     <div class="panel">
       <div class="row">
-        <div><label>Hue (°)</label><input type="number" id="genHue" value="40" min="0" max="360"></div>
-        <div><label>Старт L</label><input type="number" id="genStart" value="241"></div>
+        <div><label>Hue (°)</label><input type="number" id="genHue" min="0" max="360"></div>
+        <div><label>Старт L</label><input type="number" id="genStart"></div>
       </div>
       <div class="row">
         <div><label>Шаг</label><input type="number" id="genStep" value="8" step="0.1"></div>
@@ -155,6 +155,20 @@
         Закрепить текущий ряд как референс
       </label>
       <div id="refOut"></div>
+    </div>
+
+    <div id="massBlock" class="panel">
+      <div class="btn-row" style="margin-top:0;">
+        <button class="primary" onclick="createForAllHues()">Создать для всех hue</button>
+      </div>
+      <div class="row">
+        <div style="flex:0 0 80px; min-width:70px;"><label>S для hue</label><input type="number" id="massS" min="0" max="100"></div>
+        <div style="flex:1; min-width:120px;"><label>&nbsp;</label><input type="text" id="massSHues"></div>
+      </div>
+      <label>Исключить</label>
+      <input type="text" id="massExclude">
+      <label>Добавить</label>
+      <input type="text" id="massAdd">
     </div>
   </div>
 
@@ -201,12 +215,25 @@
   </div>
 </div>
 
+<div id="saveChoiceModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="hint" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Как сохранить правку?</div>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button onclick="closeSaveChoice()">Отмена</button>
+      <button onclick="commitEdit('new')">Добавить как новый</button>
+      <button class="primary" onclick="commitEdit('replace')">Заменить</button>
+    </div>
+  </div>
+</div>
+
 <div class="screen hidden" id="resultScreen">
   <div class="topbar">
     <div class="left-actions">
       <button onclick="showSelect()" title="Вернуться к выбору" style="font-size:18px; line-height:1; padding:9px 16px;">↩</button>
     </div>
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
+      <label style="display:inline; margin:0; white-space:nowrap;">Старт</label>
+      <input type="number" id="editStartLVal" placeholder="L" min="0" max="255" step="1" style="width:56px;" disabled onblur="onEditFieldBlur()">
       <label style="display:inline; margin:0; white-space:nowrap;">Start C*</label>
       <input type="number" id="editStartCVal" placeholder="C*" min="0" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
       <label style="display:inline; margin:0; white-space:nowrap;">End C*</label>
@@ -333,6 +360,8 @@ function computeSignature(hue, maxVal, rows, sat){
 
 function buildTable(){
   let {hue, start, step, count, maxVal, sat, startC, endC} = currentInputs();
+  if(isNaN(hue)){ showToast('Проверьте Hue.'); return; }
+  if(isNaN(start) && isNaN(startC)){ showToast('Проверьте Старт L.'); return; }
   if(!isNaN(startC)){
     const res = lFromC(hue, startC, maxVal, sat);
     start = res.L;
@@ -439,6 +468,10 @@ function downloadCurrent(){
   triggerDownload(nm ? `${nm}.txt` : `HUE_${lastHue}.txt`, rowsToText(lastRows));
 }
 function downloadSelectedTxt(){
+  if(hasUnsavedEdit()){
+    showToast('Есть несохранённые изменения — нажмите OK или снимите галку.');
+    return;
+  }
   const chosen = sets.filter(s => s.selected);
   if(!chosen.length){ showToast('Ничего не отмечено.'); return; }
 
@@ -485,6 +518,7 @@ function downloadSelectedTxt(){
 
 function afterDownloadSelected(){
   sets.forEach(s => { s.selected = false; });
+  refreshEditBoxes();
   saveSets();
   renderSets();
 }
@@ -579,6 +613,7 @@ function discardPendingEdit(){
 // незакоммиченное превью прежней строки.
 function refreshEditBoxes(){
   const chosen = sets.filter(s => s.selected);
+  const startLEl = document.getElementById('editStartLVal');
   const startEl = document.getElementById('editStartCVal');
   const endEl = document.getElementById('editEndCVal');
   const applyBtn = document.getElementById('applyEditsBtn');
@@ -589,15 +624,17 @@ function refreshEditBoxes(){
       discardPendingEdit(); // если висела правка другой строки — откатить её
       editSession = { id: s.id, rows: s.rows.map(r => ({...r})), step: s.step, sat: s.sat };
     }
+    startLEl.value = s.rows[0].L;
     startEl.value = s.rows[0].C.toFixed(1);
     endEl.value = s.rows[s.rows.length-1].C.toFixed(1);
-    startEl.disabled = false; endEl.disabled = false;
+    startLEl.disabled = false; startEl.disabled = false; endEl.disabled = false;
     applyBtn.disabled = false; saveBtn.disabled = false;
   } else {
     discardPendingEdit();
+    startLEl.value = '';
     startEl.value = '';
     endEl.value = '';
-    startEl.disabled = true; endEl.disabled = true;
+    startLEl.disabled = true; startEl.disabled = true; endEl.disabled = true;
     applyBtn.disabled = true; saveBtn.disabled = true;
   }
 }
@@ -617,7 +654,7 @@ function getSingleSelected(){
 // в другое место экрана) — дублирует «Применить».
 function onEditFieldBlur(){
   setTimeout(() => {
-    const groupIds = ['editStartCVal','editEndCVal'];
+    const groupIds = ['editStartLVal','editStartCVal','editEndCVal'];
     const active = document.activeElement;
     if(active && groupIds.includes(active.id)) return; // переход между своими полями — не трогаем
     if(!document.getElementById('applyEditsBtn').disabled){
@@ -626,44 +663,122 @@ function onEditFieldBlur(){
   }, 0);
 }
 
+function rowsEqual(a, b){
+  return a.length === b.length && a.every((r,i) => r.hex === b[i].hex && r.L === b[i].L);
+}
+// Есть ли применённая, но не сохранённая (без OK) правка.
+function hasUnsavedEdit(){
+  if(!editSession) return false;
+  const s = sets.find(x => x.id === editSession.id);
+  if(!s) return false;
+  return !rowsEqual(s.rows, editSession.rows);
+}
+
+// Правила: изменение «Старт» (L) или Start C* сдвигает весь ряд с прежним шагом;
+// изменение End C* пересчитывает шаг при неизменном старте.
+// Возвращает true, если ряд корректен (или изменений нет).
 function applyEdits(){
   const s = getSingleSelected();
-  if(!s) return;
+  if(!s) return false;
+  const rawL = document.getElementById('editStartLVal').value;
   const rawStart = document.getElementById('editStartCVal').value;
   const rawEnd = document.getElementById('editEndCVal').value;
-  if(rawStart==='' || rawEnd===''){ showToast('Заполните Start C* и End C*.'); return; }
+  if(rawL==='' || rawStart==='' || rawEnd===''){ showToast('Заполните Старт, Start C* и End C*.'); return false; }
   const count = s.rows.length;
-  const a = lFromC(s.hue, parseFloat(rawStart), s.maxVal, s.sat);
-  const b = lFromC(s.hue, parseFloat(rawEnd), s.maxVal, s.sat);
-  if(count > 1 && b.L >= a.L){ showToast('End C* должна быть больше Start C*.'); return; }
-  const newStep = count > 1 ? Number(((a.L - b.L) / (count - 1)).toFixed(2)) : 0;
-  const newRows = buildRows(s.hue, a.L, newStep, count, s.maxVal, s.sat);
-  if(!newRows.length){ showToast('Такие Start C* и End C* не дают ни одной позиции.'); return; }
-  if(a.unreachable || b.unreachable) showToast('Такая C* недостижима для этого hue — взят максимум.');
+  const curL = s.rows[0].L;
+  const startLChanged = parseFloat(rawL) !== curL;
+  const startCChanged = parseFloat(rawStart).toFixed(1) !== s.rows[0].C.toFixed(1);
+  const endChanged = parseFloat(rawEnd).toFixed(1) !== s.rows[count-1].C.toFixed(1);
+  if(!startLChanged && !startCChanged && !endChanged) return true;
+
+  let unreachable = false;
+  let startL = curL;
+  if(startLChanged){
+    startL = Math.round(parseFloat(rawL));
+    if(isNaN(startL) || startL < 0 || startL > 255){ showToast('Старт должен быть в пределах 0–255.'); return false; }
+  } else if(startCChanged){
+    const a = lFromC(s.hue, parseFloat(rawStart), s.maxVal, s.sat);
+    startL = a.L;
+    unreachable = unreachable || a.unreachable;
+  }
+  let step = s.step;
+  if(endChanged && count > 1){
+    const b = lFromC(s.hue, parseFloat(rawEnd), s.maxVal, s.sat);
+    if(b.L >= startL){ showToast('End C* должна быть больше Start C*.'); return false; }
+    step = Number(((startL - b.L) / (count - 1)).toFixed(2));
+    unreachable = unreachable || b.unreachable;
+  }
+  const newRows = buildRows(s.hue, startL, step, count, s.maxVal, s.sat);
+  if(newRows.length !== count){ showToast('Ряд выходит за пределы L 0–255.'); return false; }
+  if(unreachable) showToast('Такая C* недостижима для этого hue — взят максимум.');
   s.rows = newRows;
-  s.step = newStep;
+  s.step = step;
   s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+  document.getElementById('editStartLVal').value = newRows[0].L;
   document.getElementById('editStartCVal').value = newRows[0].C.toFixed(1);
   document.getElementById('editEndCVal').value = newRows[newRows.length-1].C.toFixed(1);
   renderSets();
+  return true;
 }
 
-// OK — фиксирует текущее превью насовсем (без отката), считает,
-// какие именно параметры реально изменились относительно editSession.
+// OK — если есть правка, спрашиваем: заменить или добавить как новый.
 function saveEdits(){
   const s = getSingleSelected();
   if(!s) return;
-  if(editSession && editSession.id === s.id){
-    s.editedStartC = s.rows[0].L !== editSession.rows[0].L;
-    s.editedEndC = s.rows[s.rows.length-1].L !== editSession.rows[editSession.rows.length-1].L;
+  if(!applyEdits()) return;
+  if(!editSession || editSession.id !== s.id || rowsEqual(s.rows, editSession.rows)){
+    editSession = null;
+    s.selected = false;
+    saveSets();
+    renderSets();
+    clearEditBoxesUI();
+    showToast('Изменений нет.');
+    return;
   }
-  editSession = null; // коммит — откатывать больше нечего
-  s.selected = false;
+  document.getElementById('saveChoiceModal').classList.remove('hidden');
+}
+function closeSaveChoice(){
+  document.getElementById('saveChoiceModal').classList.add('hidden');
+}
+function commitEdit(mode){
+  if(!editSession) { closeSaveChoice(); return; }
+  const s = sets.find(x => x.id === editSession.id);
+  if(!s){ closeSaveChoice(); return; }
+  const orig = editSession;
+  const flagStart = s.rows[0].L !== orig.rows[0].L;
+  const flagEnd = s.rows[s.rows.length-1].L !== orig.rows[orig.rows.length-1].L;
+
+  if(mode === 'replace'){
+    s.editedStartC = flagStart;
+    s.editedEndC = flagEnd;
+    s.editTag = 'Изменен';
+    s.selected = false;
+  } else {
+    const newSig = s.sig;
+    if(sets.some(x => x !== s && x.sig === newSig)){
+      closeSaveChoice();
+      showToast('Такой ряд уже есть.');
+      return;
+    }
+    const editedRows = s.rows, editedStep = s.step;
+    // оригинал возвращаем как был
+    s.rows = orig.rows.map(r => ({...r}));
+    s.step = orig.step;
+    s.sat = orig.sat;
+    s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+    s.selected = false;
+    insertSetSorted({
+      id: nextId++, hue: s.hue, maxVal: s.maxVal, sat: s.sat, step: editedStep,
+      rows: editedRows, selected: false, sig: newSig, refMode: s.refMode, name: s.name,
+      editedStartC: flagStart, editedEndC: flagEnd, editTag: 'Добавлен здесь'
+    });
+  }
+  editSession = null;
+  closeSaveChoice();
   saveSets();
   renderSets();
-  updateSelectAllBtn();
   clearEditBoxesUI();
-  showToast('Изменения сохранены.');
+  showToast(mode === 'replace' ? 'Заменено.' : 'Добавлено как новый.');
 }
 
 function selectAllSets(){
@@ -684,9 +799,15 @@ function updateSelectAllBtn(){
   btn.textContent = allSelected ? 'Снять выделение' : 'Выбрать все';
 }
 function deleteOne(id){
+  if(hasUnsavedEdit() && editSession.id !== id){
+    showToast('Есть несохранённые изменения — нажмите OK или снимите галку.');
+    return;
+  }
+  if(editSession && editSession.id === id) editSession = null;
   sets = sets.filter(s => s.id !== id);
   saveSets();
   renderSets();
+  refreshEditBoxes();
 }
 function confirmClearAll(){
   document.getElementById('clearConfirmModal').classList.remove('hidden');
@@ -695,16 +816,18 @@ function closeClearConfirm(){
   document.getElementById('clearConfirmModal').classList.add('hidden');
 }
 function clearAll(){
+  editSession = null;
   sets = [];
   saveSets();
   renderSets();
+  clearEditBoxesUI();
   closeClearConfirm();
 }
 
 let expandedSets = new Set();
 
 function detailTable(rows){
-  const lines = rows.map(r => `${r.hex}  L=${r.L}`).join('\n');
+  const lines = rows.map(r => `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}`).join('\n');
   return `<div style="margin-top:8px; font-family:monospace; font-size:13px; line-height:1.5; white-space:pre;">${lines}</div>`;
 }
 
@@ -721,7 +844,7 @@ function renderSets(){
     return;
   }
   container.innerHTML = sets.map((s) => {
-    const tag = s.refMode === 'safe' ? ' (изменен по референсу)' : '';
+    const tag = (s.refMode === 'safe' ? ' (изменен по референсу)' : '') + (s.editTag ? ' — ' + s.editTag : '');
     const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     const detail = expandedSets.has(s.id) ? detailTable(s.rows) : '';
@@ -741,7 +864,7 @@ function renderSets(){
 }
 
 function clearEditBoxesUI(){
-  const ids = ['editStartCVal','editEndCVal'];
+  const ids = ['editStartLVal','editStartCVal','editEndCVal'];
   ids.forEach(id => { const el = document.getElementById(id); el.value=''; el.disabled=true; });
   document.getElementById('applyEditsBtn').disabled = true;
   document.getElementById('saveEditsBtn').disabled = true;
@@ -887,6 +1010,54 @@ function buildRowsByReferenceSafe(hue, start, count, maxVal, sat){
   const boundaryL = findBoundaryL(hue, reference.boundaryC, maxVal, sat);
   const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
   return {rows: buildRows(hue, start, newStep, count, maxVal, sat), step: newStep, boundaryL};
+}
+
+function parseHueList(str){
+  return String(str || '').trim().split(/\s+/).filter(Boolean).map(Number).filter(n => !isNaN(n));
+}
+
+function createForAllHues(){
+  const {start: start0, step: step0, count, maxVal, startC, endC} = currentInputs();
+  if(isNaN(count) || count < 1){ showToast('Проверьте Кол-во позиций.'); return; }
+  if(isNaN(startC) && isNaN(start0)){ showToast('Проверьте Старт L.'); return; }
+  if(isNaN(step0) && isNaN(endC)){ showToast('Проверьте Шаг.'); return; }
+
+  const sHues = parseHueList(document.getElementById('massSHues').value);
+  let sCustom = 1;
+  if(sHues.length){
+    const v = parseFloat(document.getElementById('massS').value);
+    if(isNaN(v)){ showToast('Укажите S для отмеченных hue.'); return; }
+    sCustom = Math.max(0, Math.min(100, v)) / 100;
+  }
+  const excl = parseHueList(document.getElementById('massExclude').value);
+
+  const hues = [];
+  hueNames.forEach(n => { const h = Number(n.hue); if(!hues.includes(h)) hues.push(h); });
+  parseHueList(document.getElementById('massAdd').value).forEach(h => { if(!hues.includes(h)) hues.push(h); });
+  const list = hues.filter(h => !excl.includes(h));
+  if(!list.length){ showToast('Список hue пуст.'); return; }
+
+  let made = 0, skipped = 0;
+  list.forEach(h => {
+    const sat = sHues.includes(h) ? sCustom : 1.0;
+    let start = start0, step = step0;
+    if(!isNaN(startC)) start = lFromC(h, startC, maxVal, sat).L;
+    if(!isNaN(endC) && count > 1){
+      const eL = lFromC(h, endC, maxVal, sat).L;
+      if(eL >= start){ skipped++; return; }
+      step = Number(((start - eL) / (count - 1)).toFixed(2));
+    }
+    const rows = buildRows(h, start, step, count, maxVal, sat);
+    if(!rows.length){ skipped++; return; }
+    const sig = computeSignature(h, maxVal, rows, sat);
+    if(sets.some(x => x.sig === sig)){ skipped++; return; }
+    insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, refMode:null, name: getNameForHue(h)});
+    made++;
+  });
+  saveSets();
+  renderSets();
+  showResults();
+  showToast(`Создано: ${made}` + (skipped ? `, пропущено: ${skipped}` : ''));
 }
 
 /* ---------- Список названий семейств (по hue) ---------- */
