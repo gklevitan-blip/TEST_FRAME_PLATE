@@ -175,11 +175,18 @@
   <div id="rightCol" class="panel">
     <h2>Построенный ряд</h2>
     <div id="genOut"></div>
-    <div id="refCheckRow" class="hint hidden" style="margin-top:10px;">
+    <div id="refCheckRow" class="hint hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
       <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
         <input type="checkbox" id="applyRefChk" onchange="onApplyRefChange(this.checked)">
         Изменить по референсу
       </label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
+          <input type="checkbox" id="plateChk" onchange="onPlateChange()">
+          Контраст plate
+        </label>
+        <input type="number" id="plateIdx" value="4" min="1" max="7" step="1" style="width:56px;" oninput="onPlateChange()" onchange="normalizePlateIdx()">
+      </div>
     </div>
   </div>
 </div>
@@ -358,14 +365,35 @@ function computeSignature(hue, maxVal, rows, sat){
   return hue + '|' + maxVal + '|' + (sat===undefined?1:sat) + '|' + rows.map(r => r.hex + ':' + r.L).join(',');
 }
 
+// Значения, которые расчёт по C* сам записал в «Старт L» / «Шаг»: помним прежнее ручное значение,
+// чтобы вернуть его, когда C* очищено.
+const autoFill = {};
+function autoWrite(id, val){
+  const el = document.getElementById(id);
+  if(!autoFill[id]) autoFill[id] = {prev: el.value};
+  autoFill[id].auto = String(val);
+  el.value = val;
+}
+function restoreAutoFields(){
+  [['genStartC','genStart'], ['genEndC','genStep']].forEach(([cId, id]) => {
+    const a = autoFill[id];
+    if(!a) return;
+    if(!isNaN(parseFloat(document.getElementById(cId).value))) return; // C* ещё задано — поле остаётся расчётным
+    const el = document.getElementById(id);
+    if(el.value === a.auto) el.value = a.prev; // не трогаем, если значение уже правили руками
+    delete autoFill[id];
+  });
+}
+
 function buildTable(){
+  restoreAutoFields();
   let {hue, start, step, count, maxVal, sat, startC, endC} = currentInputs();
   if(isNaN(hue)){ showToast('Проверьте Hue.'); return; }
   if(isNaN(start) && isNaN(startC)){ showToast('Проверьте Старт L.'); return; }
   if(!isNaN(startC)){
     const res = lFromC(hue, startC, maxVal, sat);
     start = res.L;
-    document.getElementById('genStart').value = start;
+    autoWrite('genStart', start);
     if(res.unreachable) showToast('Start C* недостижима для этого hue — взят максимум.');
   }
   if(!isNaN(endC) && count > 1){
@@ -375,7 +403,7 @@ function buildTable(){
       return;
     }
     step = Number(((start - res.L) / (count - 1)).toFixed(2));
-    document.getElementById('genStep').value = step;
+    autoWrite('genStep', step);
     if(res.unreachable) showToast('End C* недостижима для этого hue — взят максимум.');
   }
   const rows = buildRows(hue, start, step, count, maxVal, sat);
@@ -402,11 +430,45 @@ function buildTable(){
   applyChk.disabled = !reference;
 }
 
+/* ---------- Серые плашки (1 — самая тёмная, 7 — самая светлая) и контраст ---------- */
+const PLATES = [
+  {n:1, hex:'101010', L:16},
+  {n:2, hex:'151515', L:21},
+  {n:3, hex:'1A1A1A', L:26},
+  {n:4, hex:'1F1F1F', L:31},
+  {n:5, hex:'242424', L:36},
+  {n:6, hex:'292929', L:41},
+  {n:7, hex:'2E2E2E', L:46}
+];
+let lastPlateIdx = 4;
+function plateIndex(){
+  const v = parseInt(document.getElementById('plateIdx').value);
+  if(!isNaN(v)) lastPlateIdx = Math.max(1, Math.min(7, v));
+  return lastPlateIdx;
+}
+function relLum(hex){
+  const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+  return 0.2126*srgbToLinear(r) + 0.7152*srgbToLinear(g) + 0.0722*srgbToLinear(b);
+}
+function contrastOnPlate(hex){
+  const a = relLum(hex), b = relLum(PLATES[plateIndex()-1].hex);
+  return (Math.max(a,b)+0.05) / (Math.min(a,b)+0.05);
+}
+function onPlateChange(){
+  if(!lastRows) return;
+  renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
+}
+function normalizePlateIdx(){
+  document.getElementById('plateIdx').value = plateIndex();
+  onPlateChange();
+}
+
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th></tr>';
+  const showCR = document.getElementById('plateChk').checked;
+  html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
   rows.forEach(r => {
-    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td></tr>`;
+    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastOnPlate(r.hex).toFixed(1)}</td>` : '') + '</tr>';
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
@@ -452,7 +514,7 @@ function onApplyRefChange(checked){
 }
 
 function rowsToText(rows){
-  return rows.map(r => `${r.hex}  L=${r.L}`).join('\n') + '\n';
+  return rows.map(r => `${r.hex}  L=${r.L} C° ${Math.round(r.C)}`).join('\n') + '\n';
 }
 function triggerDownload(filename, text){
   const blob = new Blob([text], {type:'text/plain'});
@@ -1017,6 +1079,7 @@ function parseHueList(str){
 }
 
 function createForAllHues(){
+  restoreAutoFields();
   const {start: start0, step: step0, count, maxVal, startC, endC} = currentInputs();
   if(isNaN(count) || count < 1){ showToast('Проверьте Кол-во позиций.'); return; }
   if(isNaN(startC) && isNaN(start0)){ showToast('Проверьте Старт L.'); return; }
