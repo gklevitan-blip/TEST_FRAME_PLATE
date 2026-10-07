@@ -25,7 +25,8 @@
   .fam{margin:16px 0}
   .name{font-weight:600;margin-bottom:6px}
   .name span{color:var(--dim);font-weight:400;font-size:12px;margin-left:8px}
-  .strip{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .strip{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--line);cursor:pointer}
+  .det{margin-top:8px;font:13px/1.5 ui-monospace,Menlo,monospace;white-space:pre;overflow-x:auto}
   .chip{flex:1;min-width:0;height:64px}
   #info{position:fixed;left:0;right:0;bottom:0;padding:14px;background:#000;color:#fff;
     font:14px ui-monospace,Menlo,monospace;text-align:center}
@@ -65,24 +66,64 @@ function parse(text, base){
   return fams.filter(f => f.list.length);
 }
 
-function hueOf(list){
-  let best = null;
-  list.forEach(c => {
+const srgbToLinear = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const fLab = t => { const d = 6 / 29; return t > d*d*d ? Math.cbrt(t) : t / (3*d*d) + 4 / 29; };
+function labC(r, g, b){
+  const rl = srgbToLinear(r), gl = srgbToLinear(g), bl = srgbToLinear(b);
+  const X = 0.4124564*rl + 0.3575761*gl + 0.1804375*bl;
+  const Y = 0.2126729*rl + 0.7151522*gl + 0.0721750*bl;
+  const Z = 0.0193339*rl + 0.1191920*gl + 0.9503041*bl;
+  const fx = fLab(X / 0.95047), fy = fLab(Y), fz = fLab(Z / 1.08883);
+  const a = 500 * (fx - fy), bb = 200 * (fy - fz);
+  return Math.sqrt(a*a + bb*bb);
+}
+function hOf(r, g, b){
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0;
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+/* вычисляемые данные семейства — как на втором экране GENERATOR; для диапазонов — усреднение */
+function enrich(f){
+  const M = 255;
+  f.maxVal = M;
+  let sx = 0, sy = 0, sSum = 0, sN = 0, neutral = true;
+  f.list.forEach(c => {
     const [r, g, b] = rgb(c.hex), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-    const s = mx ? d / mx : 0;
-    if (!best || s > best.s) {
-      let h = 0;
-      if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-      best = { s, h: (h * 60 + 360) % 360 };
+    c.Lf = c.L;
+    c.L = Math.round((mx + mn) / 2 / M * 255);
+    c.C = labC(r, g, b);
+    c.pct = Math.round(d / M * 100);
+    if (d) {
+      const h = hOf(r, g, b) * Math.PI / 180;
+      sx += d * Math.cos(h); sy += d * Math.sin(h);
+      const l = (mx + mn) / (2 * M), den = 1 - Math.abs(2 * l - 1);
+      sSum += den > 0 ? d / M / den : 0; sN++;
+      if (d / mx >= 0.05) neutral = false;
     }
   });
-  return best.s < 0.05 ? null : Math.round(best.h);
+  f.hue = neutral ? null : Math.round(((Math.atan2(sy, sx) * 180 / Math.PI) + 360) % 360) % 360;
+  f.sat = sN ? Math.round(Math.min(1, sSum / sN) * 100) : 0;
+  const first = f.list[0], last = f.list[f.list.length - 1], n = f.list.length;
+  f.step = n > 1 ? (first.L - last.L) / (n - 1) : 0;
+  f.summary = [
+    f.hue === null ? 'нейтральный' : 'hue=' + f.hue,
+    'L ' + first.L + '-' + last.L,
+    'MAX=' + f.maxVal,
+    'S=' + f.sat + '%',
+    'шаг=' + f.step.toFixed(1),
+    'C* ' + Math.round(first.C) + '-' + Math.round(last.C),
+    first.pct + '-' + last.pct + '%'
+  ].join(', ') + ' (файл: L ' + first.Lf + '-' + last.Lf + ')';
 }
+const chipLine = c => c.hex + '  L=' + String(c.L).padEnd(3) + '  C° ' + c.C.toFixed(1);
+const expanded = new Set();
 
 /* порядок как в BigTest: сначала шрифты (светлые), потом плашки (тёмные); внутри по оттенку */
 function group(fams){
   fams.forEach((f, i) => {
-    f.i = i; f.hue = hueOf(f.list);
+    f.i = i; enrich(f);
     f.avg = f.list.reduce((s, c) => s + luma(c.hex), 0) / f.list.length;
   });
   const cmp = (a, b) => a.hue === b.hue ? a.i - b.i : a.hue === null ? 1 : b.hue === null ? -1 : a.hue - b.hue;
@@ -90,17 +131,25 @@ function group(fams){
 }
 
 function strip(f){
+  const key = f.name + '|' + f.list.map(c => c.hex).join(',');
   const d = document.createElement('div'); d.className = 'fam';
   const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = f.name;
-  const sp = document.createElement('span'); sp.textContent = f.hue === null ? 'нейтральный' : 'hue ' + f.hue + '°';
+  const sp = document.createElement('span'); sp.textContent = f.summary;
   nm.appendChild(sp);
   const st = document.createElement('div'); st.className = 'strip';
   f.list.forEach(c => {
     const e = document.createElement('div'); e.className = 'chip'; e.style.background = '#' + c.hex;
-    e.onclick = () => { $('info').textContent = f.name + '   ' + c.hex + '   L=' + c.L; };
+    e.onclick = () => {
+      if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
+      det.style.display = expanded.has(key) ? '' : 'none';
+      $('info').textContent = f.name + '   ' + chipLine(c);
+    };
     st.appendChild(e);
   });
-  d.appendChild(nm); d.appendChild(st);
+  const det = document.createElement('div'); det.className = 'det';
+  det.textContent = f.list.map(chipLine).join('\n');
+  det.style.display = expanded.has(key) ? '' : 'none';
+  d.appendChild(nm); d.appendChild(st); d.appendChild(det);
   return d;
 }
 
