@@ -222,6 +222,16 @@
   </div>
 </div>
 
+<div id="deleteConfirmModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="hint" id="deleteConfirmText" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Удалить эту полосу?</div>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button onclick="closeDeleteConfirm()">Отмена</button>
+      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="confirmDeleteOne()">Удалить</button>
+    </div>
+  </div>
+</div>
+
 <div id="saveChoiceModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:340px;">
     <div class="hint" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Как сохранить правку?</div>
@@ -452,6 +462,11 @@ function relLum(hex){
 }
 function contrastOnPlate(hex){
   const a = relLum(hex), b = relLum(PLATES[plateIndex()-1].hex);
+  return (Math.max(a,b)+0.05) / (Math.min(a,b)+0.05);
+}
+const REF_PLATE = 4;
+function contrastOnPlateN(hex, n){
+  const a = relLum(hex), b = relLum(PLATES[n-1].hex);
   return (Math.max(a,b)+0.05) / (Math.min(a,b)+0.05);
 }
 function onPlateChange(){
@@ -862,11 +877,28 @@ function updateSelectAllBtn(){
   const allSelected = sets.length > 0 && sets.every(s => s.selected);
   btn.textContent = allSelected ? 'Снять выделение' : 'Выбрать все';
 }
+let pendingDeleteId = null;
 function deleteOne(id){
   if(hasUnsavedEdit() && editSession.id !== id){
     showToast('Есть несохранённые изменения — нажмите OK или снимите галку.');
     return;
   }
+  const target = sets.find(x => x.id === id);
+  if(!target) return;
+  pendingDeleteId = id;
+  const first = target.rows[0], last = target.rows[target.rows.length-1];
+  document.getElementById('deleteConfirmText').textContent =
+    `Удалить полосу ${target.name ? target.name : 'hue=' + target.hue}, L ${first.L}-${last.L}?`;
+  document.getElementById('deleteConfirmModal').classList.remove('hidden');
+}
+function closeDeleteConfirm(){
+  pendingDeleteId = null;
+  document.getElementById('deleteConfirmModal').classList.add('hidden');
+}
+function confirmDeleteOne(){
+  const id = pendingDeleteId;
+  closeDeleteConfirm();
+  if(id === null) return;
   if(editSession && editSession.id === id) editSession = null;
   sets = sets.filter(s => s.id !== id);
   saveSets();
@@ -891,7 +923,7 @@ function clearAll(){
 let expandedSets = new Set();
 
 function detailTable(rows){
-  const lines = rows.map(r => `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}`).join('\n');
+  const lines = rows.map(r => `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}  CR ${contrastOnPlateN(r.hex, REF_PLATE).toFixed(1)}`).join('\n');
   return `<div style="margin-top:8px; font-family:monospace; font-size:13px; line-height:1.5; white-space:pre;">${lines}</div>`;
 }
 
