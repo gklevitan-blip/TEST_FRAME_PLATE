@@ -55,6 +55,12 @@
   button:active:not(:disabled){opacity:.8;}
   .btn-row{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
 
+  .seg{display:flex; margin-bottom:6px;}
+  .seg button{flex:1; border-radius:0;}
+  .seg button:first-child{border-radius:8px 0 0 8px;}
+  .seg button:last-child{border-radius:0 8px 8px 0; border-left:none;}
+  .seg button.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+
   .panel{
     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px;
   }
@@ -121,9 +127,13 @@
 <div class="screen" id="selectScreen">
   <div id="leftCol">
     <div class="panel">
+      <div class="seg" id="modeSeg">
+        <button type="button" id="modeFonts" onclick="setMode('fonts')">Fonts</button>
+        <button type="button" id="modePlates" onclick="setMode('plates')">Plates</button>
+      </div>
       <div class="row">
         <div><label>Hue (°)</label><input type="number" id="genHue" min="0" max="360"></div>
-        <div><label>Старт L</label><input type="number" id="genStart"></div>
+        <div><label>Старт L</label><input type="number" id="genStart" oninput="onStartLInput(this)" onchange="onStartLBlur(this)"></div>
       </div>
       <div class="row">
         <div><label>Шаг</label><input type="number" id="genStep" value="8" step="0.1"></div>
@@ -137,7 +147,7 @@
         <div style="flex:0 0 80px; min-width:70px;"><label>Brightness</label><input type="number" id="genMax" value="255" min="1" max="255"></div>
         <div style="flex:0 0 80px; min-width:70px;"><label>Saturation</label><input type="number" id="genSat" value="100" min="0" max="100"></div>
         <div style="display:flex; align-items:flex-end;">
-          <button type="button" style="width:100%; white-space:nowrap;" onclick="openNamesSheet()">Имена hue</button>
+          <button type="button" id="namesBtn" style="width:100%; white-space:nowrap;" onclick="openNamesSheet()">Имена hue для fonts</button>
         </div>
       </div>
       <div class="btn-row">
@@ -180,7 +190,7 @@
         <input type="checkbox" id="applyRefChk" onchange="onApplyRefChange(this.checked)">
         Изменить по референсу
       </label>
-      <div style="display:flex; align-items:center; gap:8px;">
+      <div id="plateBox" style="display:flex; align-items:center; gap:8px;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
           <input type="checkbox" id="plateChk" onchange="onPlateChange()">
           Контраст plate
@@ -194,7 +204,7 @@
 <div id="namesModal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="topbar" style="margin-bottom:12px;">
-      <h2>Список названий семейств (по hue)</h2>
+      <h2 id="namesTitle">Имена hue для fonts</h2>
       <button onclick="closeNamesSheet()">Закрыть</button>
     </div>
     <div class="hint" style="margin:0 0 10px;">Название присваивается семейству на экране результатов и используется как имя txt-файла.</div>
@@ -247,10 +257,11 @@
   <div class="topbar">
     <div class="left-actions">
       <button onclick="showSelect()" title="Вернуться к выбору" style="font-size:18px; line-height:1; padding:9px 16px;">↩</button>
+      <span id="modeLabel" style="align-self:center; color:var(--dim); font-size:13px; font-weight:600;">Fonts</span>
     </div>
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
       <label style="display:inline; margin:0; white-space:nowrap;">Старт</label>
-      <input type="number" id="editStartLVal" placeholder="L" min="0" max="255" step="1" style="width:56px;" disabled onblur="onEditFieldBlur()">
+      <input type="number" id="editStartLVal" placeholder="L" min="0" max="255" step="1" style="width:56px;" disabled oninput="onStartLInput(this)" onblur="onEditFieldBlur()">
       <label style="display:inline; margin:0; white-space:nowrap;">Start C*</label>
       <input type="number" id="editStartCVal" placeholder="C*" min="0" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
       <label style="display:inline; margin:0; white-space:nowrap;">End C*</label>
@@ -272,6 +283,30 @@
 <script>
 let sets = [];
 let nextId = 1;
+let mode = 'fonts'; // 'fonts' | 'plates'
+const MODE_KEY = 'generator_obojm_mode_v1';
+// Fonts: L идёт от большего к меньшему (от светлого). Plates: от меньшего к большему (от тёмного).
+function rowDir(){ return mode === 'plates' ? 1 : -1; }
+function startLDigits(){ return mode === 'plates' ? 2 : 3; }
+function validStartL(n){
+  if(!Number.isInteger(n)) return false;
+  return mode === 'plates' ? (n >= 10 && n <= 99) : (n >= 100 && n <= 255);
+}
+function startLMsg(){
+  return mode === 'plates' ? 'Plates: Старт L — двузначное число (10–99).' : 'Fonts: Старт L — трёхзначное число (100–255).';
+}
+function onStartLInput(el){
+  if(el.value === '') return;
+  let v = el.value.replace(/\D/g, '');
+  if(v.length > startLDigits()) v = v.slice(0, startLDigits());
+  if(v !== el.value) el.value = v;
+}
+function onStartLBlur(el){
+  if(el.value === '') return;
+  if(!validStartL(parseFloat(el.value))) showToast(startLMsg());
+}
+function fallbackName(hue){ return mode === 'plates' ? `PLATE_${hue}` : `HUE_${hue}`; }
+function zipName(){ return mode === 'plates' ? 'HUE_Plate.zip' : 'HUE_Font.zip'; }
 let lastRows = null;
 let lastRowsOriginal = null;
 let lastRefMode = null; // null | 'safe'
@@ -349,6 +384,16 @@ function currentInputs(){
 function lFromC(hue, targetC, maxVal, sat){
   const {peakL} = findPeakC(hue, maxVal, sat);
   const cOf = L => { const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal); return labC(r,g,b).C; };
+  if(mode === 'plates'){
+    // плашки: идём от тёмного вверх до пика, первое L, где C* достигает цели
+    for(let L=1; L<=peakL; L++){
+      if(cOf(L) >= targetC){
+        if(L > 1 && Math.abs(cOf(L-1)-targetC) < Math.abs(cOf(L)-targetC)) L = L-1;
+        return {L, unreachable:false};
+      }
+    }
+    return {L: peakL, unreachable:true};
+  }
   for(let L=254; L>=peakL; L--){
     if(cOf(L) >= targetC){
       if(L < 254 && Math.abs(cOf(L+1)-targetC) < Math.abs(cOf(L)-targetC)) L = L+1;
@@ -363,7 +408,7 @@ function buildRows(hue, start, step, count, maxVal, sat){
   if(sat===undefined) sat=1.0;
   const rows = [];
   for(let i=0;i<count;i++){
-    const L = Math.round(start - step*i);
+    const L = Math.round(start + rowDir()*step*i);
     if(L<0 || L>255) continue;
     const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
     rows.push({hex: toHex(r,g,b), L, real: rgbToLstar255(r,g,b), C: labC(r,g,b).C, pct: pctOf(r,g,b,maxVal)});
@@ -400,6 +445,7 @@ function buildTable(){
   let {hue, start, step, count, maxVal, sat, startC, endC} = currentInputs();
   if(isNaN(hue)){ showToast('Проверьте Hue.'); return; }
   if(isNaN(start) && isNaN(startC)){ showToast('Проверьте Старт L.'); return; }
+  if(isNaN(startC) && !validStartL(start)){ showToast(startLMsg()); return; }
   if(!isNaN(startC)){
     const res = lFromC(hue, startC, maxVal, sat);
     start = res.L;
@@ -408,11 +454,12 @@ function buildTable(){
   }
   if(!isNaN(endC) && count > 1){
     const res = lFromC(hue, endC, maxVal, sat);
-    if(res.L >= start){
+    const delta = (res.L - start) * rowDir();
+    if(delta <= 0){
       showToast('End C* должна быть больше C* первой позиции.');
       return;
     }
-    step = Number(((start - res.L) / (count - 1)).toFixed(2));
+    step = Number((delta / (count - 1)).toFixed(2));
     autoWrite('genStep', step);
     if(res.unreachable) showToast('End C* недостижима для этого hue — взят максимум.');
   }
@@ -480,7 +527,7 @@ function normalizePlateIdx(){
 
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  const showCR = document.getElementById('plateChk').checked;
+  const showCR = mode === 'fonts' && document.getElementById('plateChk').checked;
   html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
   rows.forEach(r => {
     html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastOnPlate(r.hex).toFixed(1)}</td>` : '') + '</tr>';
@@ -544,7 +591,7 @@ function triggerDownload(filename, text){
 function downloadCurrent(){
   if(!lastRows){ buildTable(); }
   const nm = getNameForHue(lastHue);
-  triggerDownload(nm ? `${nm}.txt` : `HUE_${lastHue}.txt`, rowsToText(lastRows));
+  triggerDownload(nm ? `${nm}.txt` : `${fallbackName(lastHue)}.txt`, rowsToText(lastRows));
 }
 function downloadSelectedTxt(){
   if(hasUnsavedEdit()){
@@ -557,14 +604,14 @@ function downloadSelectedTxt(){
   if(chosen.length === 1){
     // Один файл — просто txt, без архива.
     const nm0 = chosen[0].name;
-    triggerDownload(nm0 ? `${nm0}.txt` : `HUE_${chosen[0].hue}.txt`, rowsToText(chosen[0].rows));
+    triggerDownload(nm0 ? `${nm0}.txt` : `${fallbackName(chosen[0].hue)}.txt`, rowsToText(chosen[0].rows));
     afterDownloadSelected();
     return;
   }
 
   if(typeof JSZip === 'undefined'){
     // Нет сети / библиотека не загрузилась — fallback на старое поведение.
-    chosen.forEach(s => triggerDownload(s.name ? `${s.name}.txt` : `HUE_${s.hue}.txt`, rowsToText(s.rows)));
+    chosen.forEach(s => triggerDownload(s.name ? `${s.name}.txt` : `${fallbackName(s.hue)}.txt`, rowsToText(s.rows)));
     afterDownloadSelected();
     return;
   }
@@ -572,7 +619,7 @@ function downloadSelectedTxt(){
   const zip = new JSZip();
   const usedNames = {};
   chosen.forEach(s => {
-    let name = s.name ? `${s.name}.txt` : `HUE_${s.hue}.txt`;
+    let name = s.name ? `${s.name}.txt` : `${fallbackName(s.hue)}.txt`;
     if(usedNames[name] !== undefined){
       usedNames[name]++;
       name = name.replace(/\.txt$/, `_${usedNames[name]}.txt`);
@@ -585,7 +632,7 @@ function downloadSelectedTxt(){
   zip.generateAsync({type:'blob'}).then(blob => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'HUE_Font.zip';
+    a.href = url; a.download = zipName();
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     afterDownloadSelected();
@@ -602,18 +649,18 @@ function afterDownloadSelected(){
   renderSets();
 }
 
-const STORAGE_KEY = 'generator_obojm_sets_v1';
+function storageKey(){ return mode === 'plates' ? 'generator_obojm_plates_v1' : 'generator_obojm_sets_v1'; }
 
 function saveSets(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({sets, nextId}));
+    localStorage.setItem(storageKey(), JSON.stringify({sets, nextId}));
   }catch(e){
     console.error('Не удалось сохранить результаты:', e);
   }
 }
 function loadSets(){
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     if(!raw) return;
     const data = JSON.parse(raw);
     if(data && Array.isArray(data.sets)){
@@ -775,6 +822,7 @@ function applyEdits(){
   if(startLChanged){
     startL = Math.round(parseFloat(rawL));
     if(isNaN(startL) || startL < 0 || startL > 255){ showToast('Старт должен быть в пределах 0–255.'); return false; }
+    if(!validStartL(startL)){ showToast(startLMsg()); return false; }
   } else if(startCChanged){
     const a = lFromC(s.hue, parseFloat(rawStart), s.maxVal, s.sat);
     startL = a.L;
@@ -783,8 +831,9 @@ function applyEdits(){
   let step = s.step;
   if(endChanged && count > 1){
     const b = lFromC(s.hue, parseFloat(rawEnd), s.maxVal, s.sat);
-    if(b.L >= startL){ showToast('End C* должна быть больше Start C*.'); return false; }
-    step = Number(((startL - b.L) / (count - 1)).toFixed(2));
+    const delta = (b.L - startL) * rowDir();
+    if(delta <= 0){ showToast('End C* должна быть больше Start C*.'); return false; }
+    step = Number((delta / (count - 1)).toFixed(2));
     unreachable = unreachable || b.unreachable;
   }
   const newRows = buildRows(s.hue, startL, step, count, s.maxVal, s.sat);
@@ -923,7 +972,7 @@ function clearAll(){
 let expandedSets = new Set();
 
 function detailTable(rows){
-  const lines = rows.map(r => `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}  CR ${contrastOnPlateN(r.hex, REF_PLATE).toFixed(1)}`).join('\n');
+  const lines = rows.map(r => `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}` + (mode === 'fonts' ? `  CR ${contrastOnPlateN(r.hex, REF_PLATE).toFixed(1)}` : '')).join('\n');
   return `<div style="margin-top:8px; font-family:monospace; font-size:13px; line-height:1.5; white-space:pre;">${lines}</div>`;
 }
 
@@ -1026,6 +1075,13 @@ function labC(r,g,b){
 function findBoundaryL(hue, targetC, maxVal, sat){
   if(sat===undefined) sat=1.0;
   const {peakL} = findPeakC(hue, maxVal, sat);
+  if(mode === 'plates'){
+    for(let L=1; L<=peakL; L++){
+      const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
+      if(labC(r,g,b).C >= targetC) return L;
+    }
+    return peakL;
+  }
   for(let L=254; L>=peakL; L--){
     const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
     if(labC(r,g,b).C >= targetC) return L;
@@ -1045,16 +1101,16 @@ function findPeakC(hue, maxVal, sat){
 }
 
 /* ---------- Референс: закрепление и применение ---------- */
-const REF_KEY = 'generator_obojm_ref_v1';
+function refKey(){ return mode === 'plates' ? 'generator_obojm_plate_ref_v1' : 'generator_obojm_ref_v1'; }
 let reference = null; // {hue, maxVal, rows:[{hex,L}], boundaryC, boundaryLst}
 
 function saveRef(){
-  try{ localStorage.setItem(REF_KEY, JSON.stringify(reference)); }
+  try{ localStorage.setItem(refKey(), JSON.stringify(reference)); }
   catch(e){ console.error('Не удалось сохранить референс:', e); }
 }
 function loadRef(){
   try{
-    const raw = localStorage.getItem(REF_KEY);
+    const raw = localStorage.getItem(refKey());
     if(raw) reference = JSON.parse(raw);
   }catch(e){ console.error('Не удалось загрузить референс:', e); }
 }
@@ -1104,7 +1160,7 @@ function renderRefBlock(){
 function buildRowsByReferenceSafe(hue, start, count, maxVal, sat){
   if(sat===undefined) sat=1.0;
   const boundaryL = findBoundaryL(hue, reference.boundaryC, maxVal, sat);
-  const newStep = count > 1 ? (start - boundaryL) / (count - 1) : 0;
+  const newStep = count > 1 ? (boundaryL - start) * rowDir() / (count - 1) : 0;
   return {rows: buildRows(hue, start, newStep, count, maxVal, sat), step: newStep, boundaryL};
 }
 
@@ -1117,6 +1173,7 @@ function createForAllHues(){
   const {start: start0, step: step0, count, maxVal, startC, endC} = currentInputs();
   if(isNaN(count) || count < 1){ showToast('Проверьте Кол-во позиций.'); return; }
   if(isNaN(startC) && isNaN(start0)){ showToast('Проверьте Старт L.'); return; }
+  if(isNaN(startC) && !validStartL(start0)){ showToast(startLMsg()); return; }
   if(isNaN(step0) && isNaN(endC)){ showToast('Проверьте Шаг.'); return; }
 
   const sHues = parseHueList(document.getElementById('massSHues').value);
@@ -1141,8 +1198,9 @@ function createForAllHues(){
     if(!isNaN(startC)) start = lFromC(h, startC, maxVal, sat).L;
     if(!isNaN(endC) && count > 1){
       const eL = lFromC(h, endC, maxVal, sat).L;
-      if(eL >= start){ skipped++; return; }
-      step = Number(((start - eL) / (count - 1)).toFixed(2));
+      const delta = (eL - start) * rowDir();
+      if(delta <= 0){ skipped++; return; }
+      step = Number((delta / (count - 1)).toFixed(2));
     }
     const rows = buildRows(h, start, step, count, maxVal, sat);
     if(!rows.length){ skipped++; return; }
@@ -1158,16 +1216,21 @@ function createForAllHues(){
 }
 
 /* ---------- Список названий семейств (по hue) ---------- */
-const NAMES_KEY = 'generator_obojm_names_v1';
+function namesKey(){ return mode === 'plates' ? 'generator_obojm_plate_names_v1' : 'generator_obojm_names_v1'; }
+// Fonts: ВСЕ ЗАГЛАВНЫЕ. Plates: нижний регистр, кроме первой буквы.
+function normName(v){
+  v = String(v || '');
+  return mode === 'plates' ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v.toUpperCase();
+}
 let hueNames = []; // [{hue, name}]
 
 function saveNames(){
-  try{ localStorage.setItem(NAMES_KEY, JSON.stringify(hueNames)); }
+  try{ localStorage.setItem(namesKey(), JSON.stringify(hueNames)); }
   catch(e){ console.error('Не удалось сохранить список названий:', e); }
 }
 function loadNames(){
   try{
-    const raw = localStorage.getItem(NAMES_KEY);
+    const raw = localStorage.getItem(namesKey());
     if(raw){ const data = JSON.parse(raw); if(Array.isArray(data)) hueNames = data; }
   }catch(e){ console.error('Не удалось загрузить список названий:', e); }
 }
@@ -1197,7 +1260,7 @@ function addNameRow(){
 }
 function updateNameRow(idx, field, value){
   if(!hueNames[idx]) return;
-  hueNames[idx][field] = field==='hue' ? (parseFloat(value)||0) : (value||'').toUpperCase();
+  hueNames[idx][field] = field==='hue' ? (parseFloat(value)||0) : normName(value);
   saveNames();
 }
 function toggleNameRow(idx, checked){
@@ -1221,7 +1284,7 @@ function renderNamesSheet(){
     <div class="name-row">
       <input type="checkbox" ${n.selected?'checked':''} onchange="toggleNameRow(${i}, this.checked)" title="Отметить для удаления">
       <input class="hueInput" type="number" value="${n.hue}" oninput="updateNameRow(${i},'hue',this.value)">
-      <input class="nameInput" type="text" value="${n.name}" placeholder="Название" oninput="this.value=this.value.toUpperCase(); updateNameRow(${i},'name',this.value)">
+      <input class="nameInput" type="text" value="${n.name}" placeholder="Название" oninput="this.value=normName(this.value); updateNameRow(${i},'name',this.value)">
     </div>
   `).join('');
 }
@@ -1229,7 +1292,7 @@ function renderNamesSheet(){
 function saveNamesToTxt(){
   if(!hueNames.length){ showToast('Список пуст.'); return; }
   const text = hueNames.map(n => `${n.hue} ${(n.name||'').trim()}`).join('\n') + '\n';
-  triggerDownload('Названия_семейств.txt', text);
+  triggerDownload(mode === 'plates' ? 'Названия_плашек.txt' : 'Названия_семейств.txt', text);
 }
 
 function loadNamesFromTxt(file){
@@ -1244,7 +1307,7 @@ function loadNamesFromTxt(file){
       if(!trimmed) return;
       const m = trimmed.match(/^(-?\d+(?:\.\d+)?)\s+(.+)$/);
       if(!m){ errors.push(`Строка ${i+1}: "${line}"`); return; }
-      parsed.push({hue: parseFloat(m[1]), name: m[2].trim().toUpperCase()});
+      parsed.push({hue: parseFloat(m[1]), name: normName(m[2].trim())});
     });
     if(errors.length){
       showToast(`Ошибка в файле (${errors.length}), список не изменён.`);
@@ -1262,11 +1325,55 @@ function loadNamesFromTxt(file){
   document.getElementById('namesFileInput').value = '';
 }
 
+function applyModeUI(){
+  const pl = mode === 'plates';
+  document.getElementById('modeFonts').classList.toggle('active', !pl);
+  document.getElementById('modePlates').classList.toggle('active', pl);
+  const title = pl ? 'Имена hue для plates' : 'Имена hue для fonts';
+  document.getElementById('namesBtn').textContent = title;
+  document.getElementById('namesTitle').textContent = title;
+  document.getElementById('modeLabel').textContent = pl ? 'Plates' : 'Fonts';
+  document.getElementById('plateBox').classList.toggle('hidden', pl);
+  document.getElementById('genStep').value = pl ? 5 : 8;
+  document.getElementById('genCount').value = pl ? 7 : 8;
+}
+
+function setMode(m){
+  if(m === mode) return;
+  saveSets();
+  saveNames();
+  mode = m;
+  try{ localStorage.setItem(MODE_KEY, mode); }catch(e){}
+  sets = []; nextId = 1; expandedSets = new Set(); editSession = null;
+  hueNames = [];
+  loadSets();
+  loadNames();
+  reference = null;
+  loadRef();
+  renderRefBlock();
+  lastRows = null; lastRowsOriginal = null; lastRefMode = null;
+  lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
+  document.getElementById('genOut').innerHTML = '';
+  document.getElementById('addBtn').disabled = true;
+  document.getElementById('refCheckRow').classList.add('hidden');
+  document.getElementById('applyRefChk').checked = false;
+  Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  const st = document.getElementById('genStart');
+  if(st.value !== '' && !validStartL(parseFloat(st.value))) st.value = '';
+  renderSets();
+  applyModeUI();
+}
+
+try{
+  const m = localStorage.getItem(MODE_KEY);
+  if(m === 'plates' || m === 'fonts') mode = m;
+}catch(e){}
 loadRef();
 renderRefBlock();
 loadSets();
 renderSets();
 loadNames();
+applyModeUI();
 </script>
 </body>
 </html>
