@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Палитра титров</title>
+<link rel="icon" type="image/png" href="icon_test_frame_plate.png">
+<link rel="apple-touch-icon" href="icon_test_frame_plate.png">
+<meta name="theme-color" content="#17334F">
+<style>
+  html { color-scheme: dark; background: #0c0c0c; min-height: 100%; }
+  :root {
+    --panel-bg: #161616;
+    --panel-line: #2e2e2e;
+    --ink: #ececec;
+    --ink-dim: #8a8a8a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #0c0c0c !important;
+    color: var(--ink);
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    min-height: 100%;
+  }
+
+  .halo-text {
+    text-shadow: 0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9);
+  }
+
+  /* ---------- STAGE ---------- */
+  .stage-wrap {
+    padding: 6vh 6vw 4vh;
+    background: #0c0c0c;
+  }
+  .stage {
+    border-radius: 0;
+    display: block;
+    position: relative;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #3a3a3a;
+    margin: 0 auto;
+  }
+  .plashka {
+    position: absolute;
+    border-radius: 6px;
+    display: inline-block;
+  }
+  .stage-title {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    display: block;
+    outline: none;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .stage-title:focus {
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.25);
+    border-radius: 4px;
+  }
+  .stage-sub {
+    position: absolute;
+    top: 3%;
+    right: 3%;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    opacity: 0.9;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .stage.fs-mode .stage-sub {
+    top: auto;
+    bottom: 0.3%;
+  }
+
+  /* ---------- LEFT PANEL (frames) ---------- */
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 18px; height: 18px;
+  }
+  .frame-thumb {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+  }
+  .frame-thumb.active {
+    border-color: #ececec;
+    background: rgba(255,255,255,0.06);
+  }
+  .frame-thumb img {
+    width: 56px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .frame-thumb .fname {
+    font-size: 12px;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .frame-thumb .mark-check {
+    width: 18px; height: 18px;
+    flex-shrink: 0;
+    display: none;
+  }
+  .frame-thumb.selection-mode .mark-check {
+    display: block;
+  }
+
+  /* ---------- CONTROLS ---------- */
+  .controls {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+  }
+  .control-block {
+    flex: 1;
+    min-width: 260px;
+  }
+  .control-block.full-width {
+    flex-basis: 100%;
+  }
+  .control-label {
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin-bottom: 10px;
+  }
+  .swatch-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .mini {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .mini.selected::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 16px 16px 0;
+    border-color: transparent var(--corner-color, #fff) transparent transparent;
+    filter: drop-shadow(0 0 1.5px var(--corner-halo, rgba(0,0,0,0.9)));
+  }
+  select {
+    appearance: none;
+    background: var(--panel-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 15px;
+    width: 100%;
+  }
+  .num-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .num-field label {
+    font-size: 13px;
+    color: var(--ink);
+    flex: 1;
+  }
+  .num-field input[type="number"] {
+    width: 84px;
+    background: var(--panel-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    text-align: right;
+  }
+  .btn {
+    background: var(--panel-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    padding: 9px 13px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn:active { opacity: 0.7; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  details.settings-panel {
+    border: 1px solid var(--panel-line);
+    border-radius: 10px;
+    padding: 12px 16px;
+    background: #121212;
+  }
+  details.settings-panel summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    padding: 4px 0;
+  }
+  .settings-grid {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .settings-col { flex: 1; min-width: 240px; }
+  .settings-subhead {
+    font-size: 12px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 4px 0 10px;
+  }
+
+  .rainbow-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    padding: 3px;
+    background: conic-gradient(red, orange, yellow, greenyellow, green, cyan, blue, violet, magenta, red);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .rainbow-wrap input[type="color"] {
+    width: 100%;
+    height: 100%;
+    border: 2px solid #0c0c0c;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+  }
+  .rainbow-wrap input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  .rainbow-wrap input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+
+  .fs-counter {
+    display: none;
+    position: absolute;
+    bottom: 0.3%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    font-size: 14px;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .stage.fs-mode .fs-counter { display: block; }
+
+  .fs-color-controls {
+    display: none;
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 20;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .stage.fs-mode .fs-color-controls {
+    display: flex;
+  }
+  .fs-item {
+    position: relative;
+  }
+  .fs-rect {
+    width: 46px;
+    height: 32px;
+    border-radius: 6px;
+    border: 2px solid #8a8a8a;
+    background-clip: padding-box;
+    cursor: pointer;
+    display: block;
+    position: relative;
+    overflow: hidden;
+  }
+  .fs-rect::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 0 0 0;
+    border-color: transparent var(--corner-color, #fff) transparent transparent;
+    transition: border-width 0.1s;
+  }
+  .fs-rect.active::after {
+    border-width: 0 var(--corner-size, 14px) var(--corner-size, 14px) 0;
+  }
+  #fgFsRect { --corner-color: #000000; }
+  #bgFsRect { --corner-color: #ffffff; --corner-size: 12px; }
+  .fs-label {
+    font-size: 11px;
+    color: #fff;
+    text-align: center;
+    margin-top: 5px;
+  }
+  .fs-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background: rgba(12,12,12,0.94);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    padding: 10px;
+    width: 230px;
+    z-index: 30;
+  }
+  .fs-panel.open {
+    display: block;
+  }
+  .fs-panel select {
+    width: 100%;
+    background: var(--panel-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+  .fs-panel .swatch-row {
+    margin-top: 10px;
+  }
+  .fs-panel .rainbow-wrap {
+    margin-top: 10px;
+  }
+
+  /* ---------- REFERENCE ---------- */
+  .reference {
+    padding: 2vh 6vw 8vh;
+  }
+  .section-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 40px 0 4px;
+    color: #ececec !important;
+  }
+  .section-sub {
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin-bottom: 18px;
+  }
+  .family-block {
+    margin-bottom: 26px;
+  }
+  .family-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    color: #ececec !important;
+  }
+  .fam-del {
+    margin-left: auto;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border: 1px solid var(--panel-line);
+    border-radius: 6px;
+    background: var(--panel-bg);
+    color: var(--ink);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+  }
+  .fam-del:active { opacity: 0.6; }
+  .family-name .hue-tag {
+    margin-left: 8px;
+    font-size: 12px;
+    color: var(--ink-dim);
+    font-weight: 400;
+  }
+  .family-strip {
+    display: flex;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--panel-line);
+  }
+  .chip {
+    flex: 1;
+    min-width: 46px;
+    height: 64px;
+    position: relative;
+    cursor: pointer;
+  }
+  .chip:hover .chip-tip {
+    opacity: 1;
+  }
+  .chip-tip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    font-size: 11px;
+    padding: 4px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+    z-index: 5;
+  }
+
+  @media (max-width: 640px) {
+    .chip { min-width: 28px; height: 48px; }
+  }
+
+  .stage.fs-mode {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    background-size: 100% 100%;
+    z-index: 999;
+  }
+
+  .main-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .stage-col {
+    flex: 1;
+    min-width: 0;
+  }
+  .left-col {
+    width: 180px;
+    flex-shrink: 0;
+  }
+  @media (max-width: 800px) {
+    .main-layout { flex-direction: column; }
+    .left-col { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage-wrap">
+  <div class="main-layout">
+    <div class="left-col left-panel">
+      <div class="toggle-row">
+        <input type="checkbox" id="plashkaEnabledCheck" checked>
+        <label for="plashkaEnabledCheck" style="font-size:13px;">Плашка</label>
+      </div>
+      <input type="file" id="frameInput" accept="image/*" style="display:none;">
+      <button id="addFrameBtn" class="btn">＋ Выбрать файл</button>
+      <div style="font-size:11px; color:var(--ink-dim);" id="frameCountLabel">0 / 5 кадров</div>
+      <div id="frameGallery" style="margin-top:10px;"></div>
+      <button id="showGalleryBtn" class="btn" style="margin-top:10px;">Выбрать</button>
+      <button id="deleteMarkedBtn" class="btn" style="display:none; margin-top:8px;">🗑 Удалить</button>
+    </div>
+
+    <div class="stage-col">
+      <div class="stage" id="stage">
+        <div class="plashka" id="plashka">
+          <div class="stage-title" id="stageTitle" contenteditable="true" spellcheck="false"></div>
+        </div>
+        <div class="stage-sub halo-text" id="stageSub"></div>
+        <div id="fsActionsWrap" style="display:none; position:absolute; top:14px; right:14px; z-index:20; flex-direction:column; align-items:flex-end; gap:57px;">
+          <button id="closeFullscreenBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">✕ Свернуть</button>
+          <button id="addToListFsBtn" style="background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer;">＋ Добавить</button>
+        </div>
+        <div id="fsCounter" class="fs-counter halo-text"></div>
+        <div class="fs-color-controls">
+          <div class="fs-item">
+            <button class="fs-rect" id="fgFsRect" type="button"></button>
+            <div class="fs-label halo-text">Шрифт</div>
+            <div class="fs-panel" id="fgFsPanel">
+              <select id="fgFsSelect"></select>
+              <div class="swatch-row" id="fgFsSwatches"></div>
+              <div class="rainbow-wrap" id="fgFsCustomWrap" style="display:none;"><input type="color" id="fgCustomColorFS"></div>
+            </div>
+          </div>
+          <div class="fs-item">
+            <button class="fs-rect" id="bgFsRect" type="button"></button>
+            <div class="fs-label halo-text">Плашка</div>
+            <div class="fs-panel" id="bgFsPanel">
+              <select id="bgFsSelect"></select>
+              <div class="swatch-row" id="bgFsSwatches"></div>
+              <div class="rainbow-wrap" id="bgFsCustomWrap" style="display:none;"><input type="color" id="bgCustomColorFS"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:right; margin-top:10px;">
+        <button id="openFullscreenBtn" class="btn">⤢ Во весь экран</button>
+      </div>
+
+      <div class="controls">
+        <div class="control-block">
+          <div class="control-label">Шрифт</div>
+          <select id="fgFamilySelect"></select>
+          <div class="swatch-row" id="fgSwatches" style="margin-top:10px;"></div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
+            <div class="rainbow-wrap"><input type="color" id="fgCustomColor"></div>
+            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+          </div>
+        </div>
+        <div class="control-block">
+          <div class="control-label">Плашка</div>
+          <select id="bgFamilySelect"></select>
+          <div class="swatch-row" id="bgSwatches" style="margin-top:10px;"></div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
+            <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
+            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+          </div>
+        </div>
+
+        <div class="control-block full-width">
+          <button id="addToListBtn" class="btn" style="width:100%;">＋ Добавить в список</button>
+        </div>
+
+        <div class="control-block full-width">
+          <details class="settings-panel" id="settingsPanel">
+            <summary>⚙ Настройки: размер, положение, прозрачность</summary>
+            <div class="settings-grid" style="margin-top:14px;">
+              <div class="settings-col">
+                <div class="settings-subhead">Размер</div>
+                <div class="num-field"><label>Шрифт Title, px</label><input type="number" id="titleFontSizeNum" min="10" max="300" step="1"></div>
+                <div class="num-field"><label>Шрифт Subtitle, px</label><input type="number" id="subtitleFontSizeNum" min="10" max="300" step="1"></div>
+                <div class="num-field"><label>Отступ плашки, %</label><input type="number" id="plashkaPadNum" min="0" max="400" step="1"></div>
+                <div class="num-field"><label>Прозрачность плашки, %</label><input type="number" id="plashkaOpacityNum" min="0" max="100" step="1"></div>
+              </div>
+              <div class="settings-col">
+                <div class="settings-subhead">Положение плашки, %</div>
+                <div class="num-field"><label>По горизонтали (X)</label><input type="number" id="plashkaPosXNum" min="-20" max="100" step="1"></div>
+                <div class="num-field"><label>По вертикали (Y)</label><input type="number" id="plashkaPosYNum" min="-20" max="100" step="1"></div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="control-block full-width">
+          <textarea id="comboListArea" style="width:100%; height:110px; margin-top:0; background:var(--panel-bg); color:var(--ink); border:1px solid var(--panel-line); border-radius:8px; padding:8px; font-size:12px; font-family:monospace; resize:vertical;"></textarea>
+          <button id="clearListBtn" class="btn" style="width:100%; margin-top:8px;">🗑 Очистить список сочетаний</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="reference" id="reference">
+  <div id="allFamilies"></div>
+</div>
+
+<script>
+const DATA = {
+  text: {
+    "RED": { hue:0, list:["FFE5E5:242","FFDBDB:237","FFD1D1:232","FFC7C7:227","FFBFBF:223","FFB5B5:218","FFABAB:213","FFA1A1:208"] },
+    "BEIGE": { hue:40, list:["F3EADD:232","F0E3D1:224","ECDBC4:216","E8D4B9:208","E3CDAD:200","E0C5A1:192","DCBE94:184","D8B789:176"] },
+    "LIGHT_BLUE": { hue:220, list:["D1E0FF:232","C7DAFF:227","BDD3FF:222","B3CCFF:217","ABC7FF:213","A1C0FF:208","97BAFF:203","8DB3FF:198"] },
+    "CYAN": { hue:180, list:["D5FFFF:234","C9FFFF:228","BFFFFF:223","B3FFFF:217","A7FFFF:211","9BFFFF:205","91FFFF:200","85FFFF:194"] },
+    "YELLOW": { hue:60, list:["FBF7CD:228","FAF5BE:220","F9F2AF:212","F7F0A1:204","F6EE92:196","F5EB83:188","F4E974:180","F3E765:172"] },
+    "PEACH": { hue:20, list:["FFE8DD:238","FFE0D1:232","FFDAC7:227","FFD2BB:221","FFCAAF:215","FFC2A3:209","FFBB99:204","FFB38D:198"] },
+    "ORANGE": { hue:39, list:["FFF5E1:240","FFEFD1:232","FFEAC3:225","FFE4B3:217","FFDFA3:209","FFD993:201","FFD485:194","FFCF75:186"] },
+    "AZURE": { hue:200, list:["D5F1FF:234","C7ECFF:227","BBE8FF:221","ADE4FF:214","9FDFFF:207","91DAFF:200","85D6FF:194","77D2FF:187"] },
+    "ROSE": { hue:335, list:["FFE5F6:242","FFDDF4:238","FFD7F2:235","FFCFEF:231","FFC9ED:228","FFC1EA:224","FFBBE8:221","FFB3E6:217"] },
+    "BLUE": { hue:240, list:["D9D9FF:236","D3D3FF:233","CBCBFF:229","C5C5FF:226","BFBFFF:223","B9B9FF:220","B1B1FF:216","ABABFF:213"] },
+    "PURPLE": { hue:280, list:["F4DDFF:238","F2D7FF:235","F0D3FF:233","EECDFF:230","ECC7FF:227","EAC1FF:224","E9BDFF:222","E7B7FF:219"] },
+    "SALAT": { hue:90, list:["DCF8C0:220","D7F7B7:215","D3F6B0:211","CEF5A7:206","CAF4A0:202","C5F397:197","C1F38F:193","BCF286:188"] },
+    "OLIVE": { hue:70, list:["E5EEBA:212","E2EBB1:206","DFE9A9:201","DBE79F:195","D7E595:189","D4E28C:183","D1E084:178","CDDE7A:172"] },
+    "GREEN": { hue:120, list:["D6FAD6:232","CDF9CD:227","C5F9C5:223","BCF8BC:218","B5F7B5:214","ACF6AC:209","A5F5A5:205","9CF49C:200"] },
+    "MINT": { hue:155, list:["D9FFEF:236","CFFFEB:231","C7FFE8:227","BDFFE4:222","B5FFE0:218","ABFFDC:213","A3FFD9:209","99FFD5:204"] },
+  },
+  bg: {
+    "Azure_1": { hue:205, list:["001422:17","001A2B:22","001F33:26","00253D:31","002B47:36","003151:41","00375B:46"] },
+    "Azure_2": { hue:210, list:["001327:16","001831:21","001E3D:26","002347:30","002A53:36","002F5D:40","003469:45"] },
+    "Blue": { hue:225, list:["001143:17","001656:22","001B6A:27","001F7A:31","00248E:36","0029A2:41","002DB2:45"] },
+    "Bordeaux": { hue:345, list:["410010:15","570016:20","6C001B:25","820021:30","980026:35","AD002B:40","C30031:45"] },
+    "Brown": { hue:27, list:["1B1007:18","221408:22","29180A:27","311C0C:31","39200E:36","3F2510:41","462912:46"] },
+    "Brown_2": { hue:20, list:["180F0B:17","20140E:22","271811:27","2C1C14:31","342117:36","3B251A:41","422A1E:46"] },
+    "Brown_3": { hue:8, list:["160D0C:15","1D1210:20","241614:25","2C1B18:30","331F1C:35","3A2320:40","412824:45"] },
+    "Cyan": { hue:193, list:["00161C:18","001C24:23","00212C:27","002732:32","002D3A:36","003342:41","00394A:46"] },
+    "Graphite": { hue:null, list:["111111:17","161616:22","1A1A1A:26","1F1F1F:31","242424:36","292929:41","2E2E2E:46"] },
+    "Grass": { hue:91, list:["0C1405:17","101906:22","131F08:27","172509:32","1A2B0A:37","1E310C:42","21360D:47"] },
+    "Green": { hue:120, list:["001500:15","001C00:20","002300:25","002A00:30","003100:35","003800:40","004000:46"] },
+    "Indigo": { hue:255, list:["1E0078:15","2800A0:20","3200C7:25","3C00EF:30"] },
+    "Olive": { hue:63, list:["121300:17","171800:22","1C1D00:27","212200:31","272700:36","2C2C00:41","313100:45"] },
+    "Orange": { hue:29, list:["1F0F00:17","271300:22","301800:27","381C00:32","3F2000:36","472400:41","512800:46"] },
+    "Plum": { hue:310, list:["37002E:15","49003D:20","5B004C:25","6E005C:30","80006B:35","93007A:40","A50089:45"] },
+    "Purple": { hue:280, list:["350050:17","440066:22","53007C:27","620092:31","7000A9:36","7F00BF:41","8E00D5:46"] },
+    "Red": { hue:0, list:["500000:17","670000:22","7D0000:27","930000:31","AA0000:36","C00000:41","D70000:46"] },
+    "Rose": { hue:335, list:["3E001A:15","520022:20","67002B:25","7C0034:30","90003C:35","A50045:40","B9004D:45"] },
+    "Seawave": { hue:185, list:["001517:17","001C1E:22","002124:26","00272B:31","002D31:36","003438:41","003A3F:46"] },
+  }
+};
+
+const PLACEHOLDER_IMG = "data:image/svg+xml;utf8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#7A8C74"/></svg>'
+);
+
+function hexOf(entry){ return "#" + entry.split(":")[0]; }
+function lOf(entry){ return entry.split(":")[1]; }
+function hexRaw(entry){ return entry.split(":")[0]; }
+function hexToRgb(hex){
+  const h = hex.replace("#","");
+  return { r: parseInt(h.substring(0,2),16), g: parseInt(h.substring(2,4),16), b: parseInt(h.substring(4,6),16) };
+}
+
+const STORAGE_KEY = "paletteToolSettings_v2";
+const MAX_FRAMES = 5;
+const DEFAULT_TITLE = "Заголовок или подпись к видеосюжету";
+
+const SIZING_KEYS = ["titleFontScale", "subtitleFontScale", "plashkaScale", "plashkaOpacity", "plashkaPosX", "plashkaPosY"];
+const SIZING_DEFAULTS_VERSION = 3; // bump this whenever HARDCODED_SIZING_DEFAULTS below changes, to force-apply it once
+const HARDCODED_SIZING_DEFAULTS = {
+  titleFontScale: 76, subtitleFontScale: 76, plashkaScale: 50, plashkaOpacity: 60,
+  plashkaPosX: 3, plashkaPosY: 3
+};
+
+function defaultFrameSettings(fileName, dataURL){
+  // New frames (and the very first placeholder) start from the last sizing the
+  // user actually set, not from hardcoded numbers — so font/plate sizing doesn't
+  // appear to "reset" every time a new photo is added.
+  const sizing = (typeof state !== "undefined" && state.lastSizing) ? state.lastSizing : HARDCODED_SIZING_DEFAULTS;
+  return {
+    id: "f" + Date.now() + Math.random().toString(36).slice(2,7),
+    fileName: fileName,
+    dataURL: dataURL,
+    bgFamily: null, bgIndex: 0, bgCustomHex: "#000000",
+    fgFamily: null, fgIndex: 0, fgCustomHex: "#FFFFFF",
+    titleFontScale: sizing.titleFontScale, subtitleFontScale: sizing.subtitleFontScale,
+    plashkaScale: sizing.plashkaScale, plashkaOpacity: sizing.plashkaOpacity,
+    plashkaPosX: sizing.plashkaPosX, plashkaPosY: sizing.plashkaPosY,
+    plashkaEnabled: true,
+    titleText: DEFAULT_TITLE
+  };
+}
+
+function loadState(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null, sizingDefaultsVersion: null };
+    const parsed = JSON.parse(raw);
+    return {
+      frames: Array.isArray(parsed.frames) ? parsed.frames : [],
+      activeFrameId: parsed.activeFrameId || null,
+      comboList: parsed.comboList || "",
+      savedCombos: (Array.isArray(parsed.savedCombos) ? parsed.savedCombos : []).map(normalizeSavedCombo),
+      placeholderSettings: parsed.placeholderSettings || null,
+      lastSizing: parsed.lastSizing || null,
+      sizingDefaultsVersion: parsed.sizingDefaultsVersion || null,
+      removed: parsed.removed || null,
+      added: parsed.added || null
+    };
+  } catch(e){
+    return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null, sizingDefaultsVersion: null };
+  }
+}
+function saveState(){
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      frames: state.frames,
+      activeFrameId: state.activeFrameId,
+      comboList: state.comboList,
+      savedCombos: state.savedCombos,
+      placeholderSettings: state.placeholderSettings,
+      lastSizing: state.lastSizing,
+      sizingDefaultsVersion: state.sizingDefaultsVersion,
+      removed: state.removed,
+      added: state.added
+    }));
+  } catch(e){ /* quota exceeded etc */ }
+}
+
+let state = loadState();
+// Force-apply a new hardcoded sizing default exactly once when it changes (see
+// SIZING_DEFAULTS_VERSION above). Only touches the "what a NEW/placeholder frame
+// starts at" values — never touches sizing already saved on existing photo frames.
+if (state.sizingDefaultsVersion !== SIZING_DEFAULTS_VERSION) {
+  state.lastSizing = null;
+  if (state.placeholderSettings) {
+    SIZING_KEYS.forEach(k => { state.placeholderSettings[k] = HARDCODED_SIZING_DEFAULTS[k]; });
+  }
+  state.sizingDefaultsVersion = SIZING_DEFAULTS_VERSION;
+}
+// Settings used when no real frame is uploaded/selected (the placeholder image).
+// These must be persisted too, or every visit without an active frame reset them to defaults.
+if (!state.placeholderSettings) {
+  state.placeholderSettings = defaultFrameSettings(null, PLACEHOLDER_IMG);
+}
+let markedForDelete = new Set();
+
+function applyRemovals(){
+  if (!state.removed) state.removed = {};
+  ["text","bg"].forEach(k => {
+    const r = state.removed[k] || (state.removed[k] = {});
+    r.families = r.families || [];
+    r.families.forEach(n => { delete DATA[k][n]; });
+  });
+  if (!state.added) state.added = { text: {}, bg: {} };
+  ["text","bg"].forEach(k => {
+    const a = state.added[k] || (state.added[k] = {});
+    Object.keys(a).forEach(n => { DATA[k][n] = a[n]; });
+  });
+}
+function sanitizeFrameFamilies(f){
+  if (f.bgFamily && !DATA.bg[f.bgFamily]) { f.bgFamily = null; if (!f.bgCustomHex) f.bgCustomHex = "#000000"; }
+  if (f.fgFamily && !DATA.text[f.fgFamily]) { f.fgFamily = null; if (!f.fgCustomHex) f.fgCustomHex = "#FFFFFF"; }
+}
+applyRemovals();
+state.frames.forEach(sanitizeFrameFamilies);
+sanitizeFrameFamilies(state.placeholderSettings);
+
+function activeFrame(){
+  const f = state.frames.find(fr => fr.id === state.activeFrameId);
+  return f || state.placeholderSettings;
+}
+function isUsingRealFrame(){
+  return !!state.frames.find(fr => fr.id === state.activeFrameId);
+}
+
+function clampIndex(idx, len){
+  if (len <= 0) return 0;
+  return Math.max(0, Math.min(idx, len-1));
+}
+
+function currentBgHex(){
+  const f = activeFrame();
+  if (f.bgCustomHex) return f.bgCustomHex;
+  const list = DATA.bg[f.bgFamily].list;
+  const idx = clampIndex(f.bgIndex, list.length);
+  return hexOf(list[idx]);
+}
+function currentFgHex(){
+  const f = activeFrame();
+  if (f.fgCustomHex) return f.fgCustomHex;
+  const list = DATA.text[f.fgFamily].list;
+  const idx = clampIndex(f.fgIndex, list.length);
+  return hexOf(list[idx]);
+}
+
+const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+function namesAlpha(obj){
+  return Object.keys(obj).sort((a, b) => NAME_COLLATOR.compare(a, b));
+}
+function populateSelect(sel, obj, onChange){
+  sel.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = "";
+  ph.textContent = "Выбрать…";
+  ph.disabled = true;
+  sel.appendChild(ph);
+  namesAlpha(obj).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => onChange(sel.value);
+}
+function populateFsSelect(sel, obj, onFamily, onCustom){
+  sel.innerHTML = "";
+  namesAlpha(obj).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  const customOpt = document.createElement("option");
+  customOpt.value = "__custom__";
+  customOpt.textContent = "Свой цвет";
+  sel.appendChild(customOpt);
+  sel.onchange = () => {
+    if (sel.value === "__custom__") onCustom();
+    else onFamily(sel.value);
+  };
+}
+
+function simpleLuma(hex){
+  const {r,g,b} = hexToRgb(hex);
+  return 0.2126*r + 0.7152*g + 0.0722*b;
+}
+function renderSwatchRow(container, familyName, obj, activeIdx, onPick){
+  container.innerHTML = "";
+  if (!familyName) return;
+  obj[familyName].list.forEach((entry, idx) => {
+    const hex = hexOf(entry);
+    const div = document.createElement("div");
+    div.className = "mini";
+    div.style.background = hex;
+    if (idx === activeIdx) {
+      div.classList.add("selected");
+      const light = simpleLuma(hex) > 128;
+      div.style.setProperty("--corner-color", light ? "#000000" : "#FFFFFF");
+      div.style.setProperty("--corner-halo", light ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.9)");
+    }
+    div.title = hexRaw(entry) + "  L=" + lOf(entry);
+    div.onclick = () => onPick(idx);
+    container.appendChild(div);
+  });
+}
+
+function pickBgSwatch(idx){
+  const f = activeFrame();
+  f.bgIndex = idx;
+  f.bgCustomHex = null;
+  syncBgUI(); updateStage(); saveState();
+}
+function pickFgSwatch(idx){
+  const f = activeFrame();
+  f.fgIndex = idx;
+  f.fgCustomHex = null;
+  syncFgUI(); updateStage(); saveState();
+}
+function setBgFamily(name){
+  const f = activeFrame();
+  f.bgFamily = name;
+  f.bgIndex = clampIndex(f.bgIndex, DATA.bg[name].list.length);
+  f.bgCustomHex = null;
+  syncBgUI(); updateStage(); saveState();
+}
+function setFgFamily(name){
+  const f = activeFrame();
+  f.fgFamily = name;
+  f.fgIndex = clampIndex(f.fgIndex, DATA.text[name].list.length);
+  f.fgCustomHex = null;
+  syncFgUI(); updateStage(); saveState();
+}
+function setBgCustom(hex){
+  const f = activeFrame();
+  f.bgCustomHex = hex.toUpperCase();
+  document.getElementById("bgCustomColor").value = f.bgCustomHex;
+  document.getElementById("bgCustomColorFS").value = f.bgCustomHex;
+  syncBgUI(); updateStage(); saveState();
+}
+function setFgCustom(hex){
+  const f = activeFrame();
+  f.fgCustomHex = hex.toUpperCase();
+  document.getElementById("fgCustomColor").value = f.fgCustomHex;
+  document.getElementById("fgCustomColorFS").value = f.fgCustomHex;
+  syncFgUI(); updateStage(); saveState();
+}
+
+function refreshBgSwatches(){
+  const f = activeFrame();
+  const idx = f.bgCustomHex ? -1 : clampIndex(f.bgIndex, f.bgFamily ? DATA.bg[f.bgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("bgSwatches"), f.bgFamily, DATA.bg, idx, pickBgSwatch);
+}
+function refreshFgSwatches(){
+  const f = activeFrame();
+  const idx = f.fgCustomHex ? -1 : clampIndex(f.fgIndex, f.fgFamily ? DATA.text[f.fgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("fgSwatches"), f.fgFamily, DATA.text, idx, pickFgSwatch);
+}
+function refreshBgFsSwatches(){
+  const f = activeFrame();
+  const idx = f.bgCustomHex ? -1 : clampIndex(f.bgIndex, f.bgFamily ? DATA.bg[f.bgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("bgFsSwatches"), f.bgFamily, DATA.bg, idx, pickBgSwatch);
+}
+function refreshFgFsSwatches(){
+  const f = activeFrame();
+  const idx = f.fgCustomHex ? -1 : clampIndex(f.fgIndex, f.fgFamily ? DATA.text[f.fgFamily].list.length : 0);
+  renderSwatchRow(document.getElementById("fgFsSwatches"), f.fgFamily, DATA.text, idx, pickFgSwatch);
+}
+
+function syncBgUI(){
+  const f = activeFrame();
+  const bgSelEl = document.getElementById("bgFamilySelect");
+  const bgFsSelEl = document.getElementById("bgFsSelect");
+  if (bgSelEl) bgSelEl.value = f.bgFamily || "";
+  if (bgFsSelEl) bgFsSelEl.value = f.bgCustomHex ? "__custom__" : (f.bgFamily || "__custom__");
+  refreshBgSwatches();
+  refreshBgFsSwatches();
+  document.getElementById("bgFsCustomWrap").style.display = f.bgCustomHex ? "block" : "none";
+  document.getElementById("bgFsRect").style.background = currentBgHex();
+  document.getElementById("bgCustomColor").value = currentBgHex();
+  document.getElementById("bgCustomColorFS").value = currentBgHex();
+}
+function syncFgUI(){
+  const f = activeFrame();
+  const fgSelEl = document.getElementById("fgFamilySelect");
+  const fgFsSelEl = document.getElementById("fgFsSelect");
+  if (fgSelEl) fgSelEl.value = f.fgFamily || "";
+  if (fgFsSelEl) fgFsSelEl.value = f.fgCustomHex ? "__custom__" : (f.fgFamily || "__custom__");
+  refreshFgSwatches();
+  refreshFgFsSwatches();
+  document.getElementById("fgFsCustomWrap").style.display = f.fgCustomHex ? "block" : "none";
+  document.getElementById("fgFsRect").style.background = currentFgHex();
+  document.getElementById("fgCustomColor").value = currentFgHex();
+  document.getElementById("fgCustomColorFS").value = currentFgHex();
+}
+
+function bgLabel(){
+  const f = activeFrame();
+  if (f.bgCustomHex) return "Свой_" + currentBgHex().replace("#","").toUpperCase();
+  const list = DATA.bg[f.bgFamily].list;
+  const idx = clampIndex(f.bgIndex, list.length);
+  return f.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
+}
+function fgLabel(){
+  const f = activeFrame();
+  if (f.fgCustomHex) return "Свой_" + currentFgHex().replace("#","").toUpperCase();
+  const list = DATA.text[f.fgFamily].list;
+  const idx = clampIndex(f.fgIndex, list.length);
+  return f.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
+}
+
+function relLum(hex){
+  const {r,g,b} = hexToRgb(hex);
+  const chan = [r,g,b].map(v => {
+    v = v/255;
+    return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+  });
+  return 0.2126*chan[0] + 0.7152*chan[1] + 0.0722*chan[2];
+}
+function contrastRatio(hexA, hexB){
+  const l1 = relLum(hexA), l2 = relLum(hexB);
+  const lighter = Math.max(l1,l2), darker = Math.min(l1,l2);
+  return (lighter+0.05)/(darker+0.05);
+}
+
+const REFERENCE_STAGE_WIDTH = 1920;
+
+function applySizes(){
+  const f = activeFrame();
+  const title = document.getElementById("stageTitle");
+  const plashka = document.getElementById("plashka");
+  const stage = document.getElementById("stage");
+  const stageW = stage.clientWidth || REFERENCE_STAGE_WIDTH;
+  const scale = stageW / REFERENCE_STAGE_WIDTH;
+
+  const rawFont = f.plashkaEnabled ? f.titleFontScale : f.subtitleFontScale;
+  const fontPx = rawFont * scale;
+  title.style.fontSize = fontPx + "px";
+
+  const padScale = f.plashkaScale/100;
+  const padV = fontPx * 0.5 * padScale;
+  const padH = fontPx * 0.75 * padScale;
+  plashka.style.padding = padV + "px " + padH + "px";
+  plashka.style.left = f.plashkaPosX + "%";
+  plashka.style.bottom = f.plashkaPosY + "%";
+  plashka.style.right = "auto";
+  plashka.style.top = "auto";
+}
+
+function applyPlashkaColor(){
+  const f = activeFrame();
+  const plashka = document.getElementById("plashka");
+  const title = document.getElementById("stageTitle");
+  if (!f.plashkaEnabled) {
+    plashka.style.backgroundColor = "transparent";
+    title.style.textShadow =
+      "0 0 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.9)";
+    return;
+  }
+  title.style.textShadow = "none";
+  const {r,g,b} = hexToRgb(currentBgHex());
+  const a = f.plashkaOpacity/100;
+  plashka.style.backgroundColor = "rgba(" + r + "," + g + "," + b + "," + a + ")";
+}
+
+function sizeStageToImage(dataURL){
+  const stage = document.getElementById("stage");
+  const wrap = stage.parentElement;
+  const img = new Image();
+  img.onload = () => {
+    const isMobile = window.innerWidth < 640;
+    const maxW = wrap.clientWidth;
+    const maxH = window.innerHeight * (isMobile ? 0.40 : 0.62);
+    let width = maxW;
+    let height = width * img.naturalHeight / img.naturalWidth;
+    if (height > maxH) { height = maxH; width = height * img.naturalWidth / img.naturalHeight; }
+    stage.style.width = Math.round(width) + "px";
+    stage.style.height = Math.round(height) + "px";
+    applySizes();
+  };
+  img.src = dataURL;
+}
+
+function updateStage(){
+  const f = activeFrame();
+  const stage = document.getElementById("stage");
+  stage.style.backgroundImage = "url(" + f.dataURL + ")";
+  sizeStageToImage(f.dataURL);
+  applyPlashkaColor();
+  document.getElementById("stageTitle").style.color = currentFgHex();
+  document.getElementById("stageTitle").textContent = f.titleText;
+  document.getElementById("plashkaEnabledCheck").checked = f.plashkaEnabled;
+
+  const fgLine = fgLabel();
+  const bgLine = bgLabel();
+  const sub = document.getElementById("stageSub");
+  if (f.plashkaEnabled) {
+    const cr = contrastRatio(currentBgHex(), currentFgHex());
+    sub.textContent = fgLine + "  ·  " + bgLine + "  ·  Контр. " + cr.toFixed(1);
+  } else {
+    sub.textContent = fgLine;
+  }
+  applySizes();
+
+  document.getElementById("titleFontSizeNum").value = f.titleFontScale;
+  document.getElementById("subtitleFontSizeNum").value = f.subtitleFontScale;
+  document.getElementById("plashkaPadNum").value = f.plashkaScale;
+  document.getElementById("plashkaOpacityNum").value = f.plashkaOpacity;
+  document.getElementById("plashkaPosXNum").value = f.plashkaPosX;
+  document.getElementById("plashkaPosYNum").value = f.plashkaPosY;
+
+  renderGallery();
+  updateFsNav();
+}
+
+function updateLastSizing(){
+  const f = activeFrame();
+  const snapshot = {};
+  SIZING_KEYS.forEach(k => { snapshot[k] = f[k]; });
+  state.lastSizing = snapshot;
+}
+function bindNumberInput(id, key, onAfter){
+  const el = document.getElementById(id);
+  el.addEventListener("input", () => {
+    const v = parseFloat(el.value);
+    if (!isNaN(v)) {
+      activeFrame()[key] = v;
+      if (SIZING_KEYS.includes(key)) updateLastSizing();
+      if (onAfter) onAfter();
+      saveState();
+    }
+  });
+}
+bindNumberInput("titleFontSizeNum", "titleFontScale", applySizes);
+bindNumberInput("subtitleFontSizeNum", "subtitleFontScale", applySizes);
+bindNumberInput("plashkaPadNum", "plashkaScale", applySizes);
+bindNumberInput("plashkaOpacityNum", "plashkaOpacity", applyPlashkaColor);
+bindNumberInput("plashkaPosXNum", "plashkaPosX", applySizes);
+bindNumberInput("plashkaPosYNum", "plashkaPosY", applySizes);
+
+document.getElementById("plashkaEnabledCheck").addEventListener("change", (e) => {
+  activeFrame().plashkaEnabled = e.target.checked;
+  updateStage();
+  saveState();
+});
+document.getElementById("stageTitle").addEventListener("input", (e) => {
+  activeFrame().titleText = e.target.textContent;
+  saveState();
+});
+
+document.getElementById("openFullscreenBtn").addEventListener("click", () => {
+  document.getElementById("stage").classList.add("fs-mode");
+  document.getElementById("fsActionsWrap").style.display = "flex";
+  document.body.style.overflow = "hidden";
+  setTimeout(applySizes, 50);
+});
+document.getElementById("closeFullscreenBtn").addEventListener("click", () => {
+  document.getElementById("stage").classList.remove("fs-mode");
+  document.getElementById("fsActionsWrap").style.display = "none";
+  document.body.style.overflow = "";
+  setTimeout(applySizes, 50);
+});
+
+/* ---------- flipping frames in fullscreen mode ---------- */
+function isFsMode(){
+  return document.getElementById("stage").classList.contains("fs-mode");
+}
+function updateFsNav(){
+  const n = state.frames.length;
+  const i = state.frames.findIndex(fr => fr.id === state.activeFrameId);
+  document.getElementById("fsCounter").textContent = (n > 0 && i >= 0) ? (i + 1) + " / " + n : "";
+}
+function stepFrame(dir){
+  const n = state.frames.length;
+  if (n < 2) return;
+  let i = state.frames.findIndex(fr => fr.id === state.activeFrameId);
+  if (i < 0) i = 0;
+  i = (i + dir + n) % n;
+  state.activeFrameId = state.frames[i].id;
+  document.getElementById("bgFsPanel").classList.remove("open");
+  document.getElementById("fgFsPanel").classList.remove("open");
+  document.getElementById("bgFsRect").classList.remove("active");
+  document.getElementById("fgFsRect").classList.remove("active");
+  syncBgUI(); syncFgUI(); updateStage(); saveState();
+}
+document.addEventListener("keydown", (e) => {
+  if (!isFsMode()) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+  if (e.key === "ArrowLeft")  { e.preventDefault(); stepFrame(-1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); stepFrame(1); }
+});
+(function(){
+  const stage = document.getElementById("stage");
+  let sx = 0, sy = 0, st = 0, tracking = false;
+  stage.addEventListener("touchstart", (e) => {
+    tracking = false;
+    if (!isFsMode() || e.touches.length !== 1) return;
+    if (e.target.closest("#stageTitle, .fs-color-controls, #fsActionsWrap")) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+    tracking = true;
+  }, { passive: true });
+  stage.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy) && Date.now() - st < 800) {
+      stepFrame(dx < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+})();
+
+function copyText(text){
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(()=>{ fallbackCopy(text); });
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position='fixed'; ta.style.left='-9999px';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+}
+function comboString(){
+  const f = activeFrame();
+  const fgLine = fgLabel();
+  const bgLine = bgLabel();
+  let out = f.plashkaEnabled
+    ? ("Шрифт: " + fgLine + "\nПлашка: " + bgLine)
+    : ("Шрифт: " + fgLine);
+  if (isUsingRealFrame() && f.fileName) out += "\nКадр: " + f.fileName;
+  return out;
+}
+function flashBtn(btn, text){
+  const old = btn.textContent;
+  btn.textContent = text;
+  setTimeout(()=>{ btn.textContent = old; }, 1200);
+}
+function colorValueEquals(a, b){
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.hex === b.hex && a.family === b.family && a.index === b.index;
+}
+function findDuplicateCombo(fileName, plate, font){
+  return state.savedCombos.some(c =>
+    c.fileName === fileName &&
+    colorValueEquals(c.plate, plate) &&
+    colorValueEquals(c.font, font)
+  );
+}
+
+function addComboToList(triggerBtn){
+  const f = activeFrame();
+
+  let plate = null;
+  if (f.plashkaEnabled) {
+    if (f.bgCustomHex) {
+      plate = { hex: currentBgHex(), family: null, index: null };
+    } else {
+      const list = DATA.bg[f.bgFamily].list;
+      const idx = clampIndex(f.bgIndex, list.length);
+      plate = { hex: currentBgHex(), family: f.bgFamily, index: idx + 1 };
+    }
+  }
+
+  let font;
+  if (f.fgCustomHex) {
+    font = { hex: currentFgHex(), family: null, index: null };
+  } else {
+    const list = DATA.text[f.fgFamily].list;
+    const idx = clampIndex(f.fgIndex, list.length);
+    font = { hex: currentFgHex(), family: f.fgFamily, index: idx + 1 };
+  }
+
+  const fileNameForCombo = f.fileName || "Без кадра";
+  if (findDuplicateCombo(fileNameForCombo, plate, font)) {
+    flashBtn(triggerBtn, "Уже в списке");
+    return;
+  }
+
+  const area = document.getElementById("comboListArea");
+  const sep = area.value.trim().length ? "\n\n---\n\n" : "";
+  area.value = area.value + sep + comboString();
+  state.comboList = area.value;
+
+  state.savedCombos.push({
+    fileName: fileNameForCombo,
+    dateStr: todayDateStr(),
+    plate: plate,
+    font: font
+  });
+
+  saveState();
+  flashBtn(triggerBtn, "Добавлено ✓");
+}
+document.getElementById("addToListBtn").addEventListener("click", () => {
+  addComboToList(document.getElementById("addToListBtn"));
+});
+document.getElementById("addToListFsBtn").addEventListener("click", () => {
+  addComboToList(document.getElementById("addToListFsBtn"));
+});
+
+function todayDateStr(){
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yyyy = d.getFullYear();
+  return dd + "." + mm + "." + yyyy;
+}
+function nowTimeStr(){
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2,"0");
+  const mi = String(d.getMinutes()).padStart(2,"0");
+  const ss = String(d.getSeconds()).padStart(2,"0");
+  return hh + "-" + mi + "-" + ss;
+}
+
+function normalizeSavedCombo(c){
+  // migrates entries saved by older versions of this tool (plateHex/fontHex strings)
+  if (c.plate !== undefined) return c;
+  return {
+    fileName: c.fileName,
+    dateStr: c.dateStr,
+    plate: c.plateHex ? { hex: c.plateHex, family: null, index: null } : null,
+    font: { hex: c.fontHex, family: null, index: null }
+  };
+}
+
+function hexWithFamily(entry){
+  const hex = entry.hex.replace("#","").toUpperCase();
+  if (entry.family) return hex + "(" + entry.family + ", " + entry.index + ")";
+  return hex + "(custom)";
+}
+
+function formatCombosTxt(){
+  if (!state.savedCombos.length) return "";
+  const groups = [];
+  const byName = {};
+  state.savedCombos.forEach(c => {
+    if (!byName[c.fileName]) {
+      byName[c.fileName] = { fileName: c.fileName, dateStr: c.dateStr, items: [] };
+      groups.push(byName[c.fileName]);
+    }
+    byName[c.fileName].items.push(c);
+  });
+  return groups.map(g => {
+    const header = g.fileName + ", " + g.dateStr;
+    const lines = g.items.map(c => {
+      const plateFragment = c.plate ? (", Plate - " + hexWithFamily(c.plate)) : "";
+      return "Font - " + hexWithFamily(c.font) + plateFragment;
+    });
+    return header + "\n\n" + lines.join("\n");
+  }).join("\n\n");
+}
+
+function outputTxtFileName(){
+  // Name the output txt after the currently loaded photo's file name, keeping
+  // only the part before its first underscore (e.g. "kadr1_raw.jpg" -> "kadr1.txt").
+  const f = activeFrame();
+  const raw = f.fileName;
+  if (raw) {
+    const noExt = raw.replace(/\.[a-zA-Z0-9]+$/, "");
+    const base = noExt.split("_")[0];
+    if (base) return base + ".txt";
+  }
+  // Fallback (no photo loaded, e.g. working on the placeholder) — date/time based name.
+  return "combos_" + todayDateStr().split(".").reverse().join("-") + "_" + nowTimeStr() + ".txt";
+}
+
+let downloadInProgress = false;
+async function downloadCombosTxt(){
+  if (downloadInProgress) return;
+  const content = formatCombosTxt();
+  if (!content) { alert("Список сочетаний пуст — сначала добавьте хотя бы одно сочетание."); return; }
+
+  downloadInProgress = true;
+  const btn = document.getElementById("downloadTxtBtn");
+  btn.disabled = true;
+  try {
+    const fileName = outputTxtFileName();
+    const file = new File([content], fileName, { type: "text/plain" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: fileName });
+        return;
+      } catch(e) {
+        if (e && e.name === "AbortError") return;
+        /* share failed for some other reason — fall through to normal download */
+      }
+    }
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } finally {
+    downloadInProgress = false;
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("comboListArea").addEventListener("input", (e) => {
+  state.comboList = e.target.value;
+  saveState();
+});
+document.getElementById("clearListBtn").addEventListener("click", () => {
+  if (!confirm("Очистить весь список сохранённых сочетаний?")) return;
+  document.getElementById("comboListArea").value = "";
+  state.comboList = "";
+  state.savedCombos = [];
+  saveState();
+});
+
+/* ---------- frame gallery ---------- */
+let selectionMode = false;
+
+function renderGallery(){
+  const gallery = document.getElementById("frameGallery");
+  gallery.innerHTML = "";
+  state.frames.forEach(fr => {
+    const row = document.createElement("div");
+    row.className = "frame-thumb" + (fr.id === state.activeFrameId ? " active" : "") + (selectionMode ? " selection-mode" : "");
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.className = "mark-check";
+    check.checked = markedForDelete.has(fr.id);
+    check.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (check.checked) markedForDelete.add(fr.id); else markedForDelete.delete(fr.id);
+    });
+    const img = document.createElement("img");
+    img.src = fr.dataURL;
+    const name = document.createElement("div");
+    name.className = "fname";
+    name.textContent = fr.fileName;
+    row.appendChild(check);
+    row.appendChild(img);
+    row.appendChild(name);
+    row.addEventListener("click", () => {
+      state.activeFrameId = fr.id;
+      syncBgUI(); syncFgUI(); updateStage(); saveState();
+    });
+    gallery.appendChild(row);
+  });
+  document.getElementById("frameCountLabel").textContent = state.frames.length + " / " + MAX_FRAMES + " кадров";
+  document.getElementById("addFrameBtn").disabled = state.frames.length >= MAX_FRAMES;
+}
+
+document.getElementById("showGalleryBtn").addEventListener("click", () => {
+  selectionMode = !selectionMode;
+  document.getElementById("showGalleryBtn").textContent = selectionMode ? "Отмена" : "Выбрать";
+  document.getElementById("deleteMarkedBtn").style.display = selectionMode ? "inline-block" : "none";
+  if (!selectionMode) markedForDelete.clear();
+  renderGallery();
+});
+document.getElementById("addFrameBtn").addEventListener("click", () => {
+  if (state.frames.length >= MAX_FRAMES) return;
+  document.getElementById("frameInput").click();
+});
+document.getElementById("frameInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (state.frames.length >= MAX_FRAMES) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const newFrame = defaultFrameSettings(file.name, ev.target.result);
+    state.frames.push(newFrame);
+    state.activeFrameId = newFrame.id;
+    syncBgUI(); syncFgUI(); updateStage(); saveState();
+  };
+  reader.readAsDataURL(file);
+  e.target.value = "";
+});
+document.getElementById("deleteMarkedBtn").addEventListener("click", () => {
+  if (!markedForDelete.size) return;
+  if (!confirm("Удалить отмеченные кадры (" + markedForDelete.size + ")?")) return;
+  state.frames = state.frames.filter(fr => !markedForDelete.has(fr.id));
+  if (!state.frames.find(fr => fr.id === state.activeFrameId)) {
+    state.activeFrameId = state.frames.length ? state.frames[0].id : null;
+  }
+  markedForDelete.clear();
+  selectionMode = false;
+  document.getElementById("showGalleryBtn").textContent = "Выбрать";
+  document.getElementById("deleteMarkedBtn").style.display = "none";
+  syncBgUI(); syncFgUI(); updateStage(); saveState();
+});
+
+/* ---------- family selects (main + fullscreen) ---------- */
+const bgSel = document.getElementById("bgFamilySelect");
+const fgSel = document.getElementById("fgFamilySelect");
+const bgFsSel = document.getElementById("bgFsSelect");
+const fgFsSel = document.getElementById("fgFsSelect");
+function buildSelects(){
+  populateSelect(bgSel, DATA.bg, setBgFamily);
+  populateSelect(fgSel, DATA.text, setFgFamily);
+  populateFsSelect(bgFsSel, DATA.bg, setBgFamily, () => {
+    document.getElementById("bgFsCustomWrap").style.display = "block";
+    document.getElementById("bgCustomColorFS").click();
+  });
+  populateFsSelect(fgFsSel, DATA.text, setFgFamily, () => {
+    document.getElementById("fgFsCustomWrap").style.display = "block";
+    document.getElementById("fgCustomColorFS").click();
+  });
+}
+buildSelects();
+
+/* ---------- deleting families (from the reference) ---------- */
+function allFrames(){ return state.frames.concat([state.placeholderSettings]); }
+function kindKeys(kind){
+  return kind === "bg"
+    ? { data: "bg", fam: "bgFamily", idx: "bgIndex", custom: "bgCustomHex" }
+    : { data: "text", fam: "fgFamily", idx: "fgIndex", custom: "fgCustomHex" };
+}
+function frameHex(fr, K){
+  if (fr[K.custom]) return fr[K.custom];
+  const list = DATA[K.data][fr[K.fam]].list;
+  return hexOf(list[clampIndex(fr[K.idx], list.length)]);
+}
+function confirmBanner(text, onYes){
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;";
+  const box = document.createElement("div");
+  box.style.cssText = "background:#161616;border:1px solid #2e2e2e;border-radius:12px;padding:20px;max-width:360px;width:100%;color:#ececec;font-size:16px;";
+  const msg = document.createElement("div");
+  msg.textContent = text;
+  msg.style.marginBottom = "18px";
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:10px;justify-content:flex-end;";
+  const no = document.createElement("button");
+  no.className = "btn"; no.type = "button"; no.textContent = "Отмена";
+  const yes = document.createElement("button");
+  yes.className = "btn"; yes.type = "button"; yes.textContent = "Удалить";
+  yes.style.borderColor = "#a33"; yes.style.color = "#ff8a8a";
+  const close = () => ov.remove();
+  no.onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  yes.onclick = () => { close(); onYes(); };
+  row.appendChild(no); row.appendChild(yes);
+  box.appendChild(msg); box.appendChild(row);
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+}
+function deleteFamily(kind, name){
+  const K = kindKeys(kind);
+  if (!DATA[K.data][name]) return;
+  confirmBanner("Удалить семейство «" + name + "» целиком?", () => {
+    allFrames().forEach(fr => {
+      if (fr[K.fam] === name) {
+        if (!fr[K.custom]) fr[K.custom] = frameHex(fr, K);
+        fr[K.fam] = null;
+      }
+    });
+    delete DATA[K.data][name];
+    if (state.added && state.added[K.data]) delete state.added[K.data][name];
+    const r = state.removed[K.data];
+    if (!r.families.includes(name)) r.families.push(name);
+    buildSelects();
+    saveState();
+    syncBgUI(); syncFgUI(); updateStage();
+    buildReference();
+  });
+}
+
+document.getElementById("bgCustomColor").addEventListener("input", (e) => setBgCustom(e.target.value));
+document.getElementById("bgCustomColorFS").addEventListener("input", (e) => setBgCustom(e.target.value));
+document.getElementById("fgCustomColor").addEventListener("input", (e) => setFgCustom(e.target.value));
+document.getElementById("fgCustomColorFS").addEventListener("input", (e) => setFgCustom(e.target.value));
+
+function toggleFsPanel(panelId, otherPanelId){
+  const panel = document.getElementById(panelId);
+  const other = document.getElementById(otherPanelId);
+  const rect = document.getElementById(panelId.replace("Panel", "Rect"));
+  const otherRect = document.getElementById(otherPanelId.replace("Panel", "Rect"));
+  const willOpen = !panel.classList.contains("open");
+  other.classList.remove("open");
+  otherRect.classList.remove("active");
+  panel.classList.toggle("open", willOpen);
+  rect.classList.toggle("active", willOpen);
+}
+document.getElementById("bgFsRect").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleFsPanel("bgFsPanel", "fgFsPanel");
+});
+document.getElementById("fgFsRect").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleFsPanel("fgFsPanel", "bgFsPanel");
+});
+document.getElementById("bgFsPanel").addEventListener("click", (e) => e.stopPropagation());
+document.getElementById("fgFsPanel").addEventListener("click", (e) => e.stopPropagation());
+document.getElementById("stage").addEventListener("click", () => {
+  document.getElementById("bgFsPanel").classList.remove("open");
+  document.getElementById("fgFsPanel").classList.remove("open");
+  document.getElementById("bgFsRect").classList.remove("active");
+  document.getElementById("fgFsRect").classList.remove("active");
+});
+
+window.addEventListener('resize', () => { applySizes(); });
+
+/* ---------- init ---------- */
+document.getElementById("comboListArea").value = state.comboList || "";
+syncBgUI();
+syncFgUI();
+updateStage();
+
+/* ---------- reference grid ---------- */
+function namesByHue(obj){
+  return Object.keys(obj).sort((a, b) => {
+    const ha = obj[a].hue, hb = obj[b].hue;
+    if (ha === null && hb === null) return 0;
+    if (ha === null) return 1;
+    if (hb === null) return -1;
+    return ha - hb;
+  });
+}
+
+function buildReference(){
+  const wrap = document.getElementById("allFamilies");
+  wrap.innerHTML = "";
+
+  const impBtn = document.createElement("button");
+  impBtn.type = "button"; impBtn.className = "btn left-col";
+  impBtn.style.cssText = "display:block;padding:16px 13px;font-size:16px;font-weight:600;white-space:nowrap;";
+  impBtn.textContent = "ИМПОРТ";
+  impBtn.onclick = importFromClipboard;
+  wrap.appendChild(impBtn);
+
+  const textHeader = document.createElement("div");
+  textHeader.className = "section-title";
+  textHeader.style.fontSize = "16px";
+  textHeader.style.marginTop = "16px";
+  textHeader.textContent = "Текстовые семейства";
+  wrap.appendChild(textHeader);
+
+  namesByHue(DATA.text).forEach(name => {
+    wrap.appendChild(familyBlock(name, DATA.text[name], "fg"));
+  });
+
+  const bgHeader = document.createElement("div");
+  bgHeader.className = "section-title";
+  bgHeader.style.fontSize = "16px";
+  bgHeader.textContent = "Фоновые семейства (плашки)";
+  wrap.appendChild(bgHeader);
+
+  namesByHue(DATA.bg).forEach(name => {
+    wrap.appendChild(familyBlock(name, DATA.bg[name], "bg"));
+  });
+}
+
+function familyBlock(name, fam, kind){
+  const block = document.createElement("div");
+  block.className = "family-block";
+
+  const label = document.createElement("div");
+  label.className = "family-name";
+  label.innerHTML = '<span style="line-height:1;">' + name + (fam.hue !== null ? ('<span class="hue-tag">hue ' + fam.hue + '°</span>') : '<span class="hue-tag">нейтральный</span>') + '</span>';
+  if (fam.params){
+    label.innerHTML = "";
+    label.style.alignItems = "center";
+    const t = document.createElement("span");
+    t.style.cssText = "flex:1;min-width:0;font-size:13px;font-weight:400;color:#ccc;font-family:ui-monospace,Menlo,monospace;line-height:30px;white-space:nowrap;overflow-x:auto;scrollbar-width:none;";
+    t.textContent = name + " — " + fam.params;
+    label.appendChild(t);
+  }
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "fam-del";
+  del.textContent = "✕";
+  del.onclick = () => deleteFamily(kind, name);
+  const ren = document.createElement("button");
+  ren.type = "button";
+  ren.className = "fam-del";
+  ren.textContent = "✎";
+  ren.style.fontSize = "18px";
+  ren.onclick = () => renameFamily(kind, name);
+  del.style.marginLeft = "0";
+  label.appendChild(ren);
+  label.appendChild(del);
+  block.appendChild(label);
+
+  const strip = document.createElement("div");
+  strip.className = "family-strip";
+  fam.list.forEach(entry => {
+    const hex = hexOf(entry);
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.style.background = hex;
+    const tip = document.createElement("div");
+    tip.className = "chip-tip";
+    tip.textContent = hexRaw(entry) + "  L=" + lOf(entry);
+    chip.appendChild(tip);
+    strip.appendChild(chip);
+  });
+  block.appendChild(strip);
+  return block;
+}
+
+/* ---------- import from GENERATOR / rename variant ---------- */
+function bannerShell(){
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;";
+  const box = document.createElement("div");
+  box.style.cssText = "background:#161616;border:1px solid #2e2e2e;border-radius:12px;padding:20px;max-width:360px;width:100%;color:#ececec;font-size:16px;";
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;";
+  return { ov, box, row };
+}
+function bannerBtn(label, danger, onclick){
+  const b = document.createElement("button");
+  b.className = "btn"; b.type = "button"; b.textContent = label;
+  if (danger){ b.style.borderColor = "#a33"; b.style.color = "#ff8a8a"; }
+  b.onclick = onclick;
+  return b;
+}
+function choiceBanner(text, buttons){
+  return new Promise(resolve => {
+    const { ov, box, row } = bannerShell();
+    const msg = document.createElement("div");
+    msg.textContent = text; msg.style.marginBottom = "18px";
+    const done = v => { ov.remove(); resolve(v); };
+    buttons.forEach(b => row.appendChild(bannerBtn(b.label, b.danger, () => done(b.value))));
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    box.appendChild(msg); box.appendChild(row); ov.appendChild(box);
+    document.body.appendChild(ov);
+  });
+}
+function inputBanner(o){
+  return new Promise(resolve => {
+    const { ov, box, row } = bannerShell();
+    if (o.text){
+      const msg = document.createElement("div");
+      msg.textContent = o.text; msg.style.marginBottom = "12px";
+      box.appendChild(msg);
+    }
+    const inp = document.createElement(o.multiline ? "textarea" : "input");
+    if (!o.multiline) inp.type = "text";
+    inp.value = o.value || "";
+    inp.style.cssText = "width:100%;box-sizing:border-box;background:var(--panel-bg);color:var(--ink);border:1px solid var(--panel-line);border-radius:8px;padding:8px;font-size:16px;margin-bottom:18px;" + (o.multiline ? "height:110px;font-family:monospace;" : "");
+    const done = v => { ov.remove(); resolve(v); };
+    row.appendChild(bannerBtn("Отмена", false, () => done(null)));
+    row.appendChild(bannerBtn(o.okLabel || "OK", false, () => done(inp.value)));
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    box.appendChild(inp); box.appendChild(row); ov.appendChild(box);
+    document.body.appendChild(ov);
+    inp.focus(); if (!o.multiline) inp.select();
+  });
+}
+function findFamilyKey(kind, name){
+  const K = kindKeys(kind);
+  const low = String(name).toLowerCase();
+  return Object.keys(DATA[K.data]).find(k => k.toLowerCase() === low) || null;
+}
+function uniqueFamilyName(kind, base){
+  let i = 1;
+  while (findFamilyKey(kind, base + "_" + i)) i++;
+  return base + "_" + i;
+}
+function putFamily(kind, name, fam){
+  const K = kindKeys(kind);
+  DATA[K.data][name] = fam;
+  if (!state.added) state.added = { text: {}, bg: {} };
+  (state.added[K.data] = state.added[K.data] || {})[name] = fam;
+}
+function refreshAfterFamilyChange(){
+  buildSelects();
+  saveState();
+  syncBgUI(); syncFgUI(); updateStage();
+  buildReference();
+}
+async function importFamilies(text){
+  let p = null;
+  try { p = JSON.parse(text); } catch(e){ p = null; }
+  if (!p || p.type !== "obojm_to_test" || !Array.isArray(p.families) || (p.kind !== "text" && p.kind !== "bg")){
+    await choiceBanner("В буфере нет семейств из Генератора.", [{ label: "OK", value: true }]);
+    return;
+  }
+  let n = 0;
+  for (const f of p.families){
+    const name = String((f && f.name) || "").trim();
+    const list = Array.isArray(f && f.list)
+      ? f.list.filter(e => /^[0-9A-Fa-f]{6}:\d+(\.\d+)?$/.test(e)).map(e => e.toUpperCase())
+      : [];
+    if (!name || !list.length) continue;
+    let finalName = name;
+    const ex = findFamilyKey(p.kind, name);
+    if (ex){
+      const ans = await choiceBanner("Семейство «" + ex + "» уже есть.", [
+        { label: "Отмена", value: "skip" },
+        { label: "Новое имя", value: "new" },
+        { label: "Заменить", value: "rep", danger: true }
+      ]);
+      if (ans === "rep") finalName = ex;
+      else if (ans === "new") finalName = uniqueFamilyName(p.kind, name);
+      else continue;
+    }
+    const fam = { hue: Number.isFinite(f.hue) ? f.hue : null, list };
+    if (typeof f.params === "string" && f.params.trim()) fam.params = f.params.trim();
+    putFamily(p.kind, finalName, fam);
+    n++;
+  }
+  if (n) refreshAfterFamilyChange();
+}
+async function importFromClipboard(){
+  let text = null;
+  try { text = await navigator.clipboard.readText(); } catch(e){ text = null; }
+  if (text === null){
+    text = await inputBanner({ multiline: true, okLabel: "Вставить" });
+    if (text === null) return;
+  }
+  await importFamilies(text);
+}
+async function renameFamily(kind, oldName){
+  const K = kindKeys(kind);
+  const typed = await inputBanner({ text: "Новое название", value: oldName, okLabel: "Переименовать" });
+  if (typed === null) return;
+  const name = typed.trim();
+  if (!name || name === oldName) return;
+  const ex = findFamilyKey(kind, name);
+  const finalName = ex || name;
+  if (finalName === oldName) return;
+  if (ex){
+    const ok = await choiceBanner("Семейство «" + ex + "» будет заменено этим вариантом. Продолжить?", [
+      { label: "Отмена", value: false },
+      { label: "Заменить", value: true, danger: true }
+    ]);
+    if (!ok) return;
+  }
+  const fam = DATA[K.data][oldName];
+  if (!fam) return;
+  delete DATA[K.data][oldName];
+  if (state.added && state.added[K.data]) delete state.added[K.data][oldName];
+  const rf = state.removed[K.data].families;
+  if (!rf.includes(oldName)) rf.push(oldName);
+  putFamily(kind, finalName, fam);
+  allFrames().forEach(fr => { if (fr[K.fam] === oldName) fr[K.fam] = finalName; });
+  refreshAfterFamilyChange();
+}
+
+buildReference();
+</script>
+
+</body>
+</html>
