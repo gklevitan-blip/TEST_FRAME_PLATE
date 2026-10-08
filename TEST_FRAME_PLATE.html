@@ -1606,7 +1606,11 @@ function familyBlock(name, fam, kind){
     label.style.alignItems = "center";
     const t = document.createElement("span");
     t.style.cssText = "flex:1;min-width:0;font-size:13px;font-weight:400;color:#ccc;font-family:ui-monospace,Menlo,monospace;line-height:30px;white-space:nowrap;overflow-x:auto;scrollbar-width:none;";
-    t.textContent = name + " — " + fam.params;
+    const nm = document.createElement("span");
+    nm.style.fontWeight = "600";
+    nm.textContent = name;
+    t.appendChild(nm);
+    t.appendChild(document.createTextNode(" — " + fam.params));
     label.appendChild(t);
   }
   const del = document.createElement("button");

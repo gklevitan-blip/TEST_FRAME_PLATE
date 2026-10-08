@@ -271,7 +271,7 @@
     </div>
     <div class="right-actions">
       <button id="selectAllBtn" onclick="selectAllSets()">Выбрать все</button>
-      <button onclick="sendToTest()">В TEST</button>
+      <button onclick="sendToTest()">ЭКСПОРТ</button>
       <button onclick="downloadSelectedTxt()">Создать txt</button>
       <button id="clearAllBtn" onclick="confirmClearAll()" disabled>Очистить</button>
     </div>
@@ -299,7 +299,7 @@ function startLMsg(){
 function onStartLInput(el){
   if(el.value === '') return;
   let v = el.value.replace(/\D/g, '');
-  if(v.length > startLDigits()) v = v.slice(0, startLDigits());
+  if(v.length > startLDigits()){ v = v.slice(0, startLDigits()); showToast(startLMsg()); }
   if(v !== el.value) el.value = v;
 }
 function onStartLBlur(el){
@@ -676,7 +676,7 @@ function sendToTest(){
     }))
   };
   copyText(JSON.stringify(payload))
-    .then(() => showToast('Скопировано: ' + chosen.length))
+    .then(() => { showToast('Скопировано: ' + chosen.length); afterDownloadSelected(); })
     .catch(() => showToast('Не удалось скопировать.'));
 }
 
@@ -1028,7 +1028,7 @@ function renderSets(){
   }
   container.innerHTML = sets.map((s) => {
     const tag = (s.refMode === 'safe' ? ' (изменен по референсу)' : '') + (s.editTag ? ' — ' + s.editTag : '');
-    const header = (s.name ? s.name + ' — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
+    const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
     const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
     const detail = expandedSets.has(s.id) ? detailTable(s.rows) : '';
     return `
