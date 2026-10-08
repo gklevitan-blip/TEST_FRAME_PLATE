@@ -389,11 +389,27 @@
     font-weight: 600;
     margin-bottom: 8px;
     display: flex;
-    align-items: baseline;
+    align-items: flex-end;
     gap: 8px;
     color: #ececec !important;
   }
+  .fam-del {
+    margin-left: auto;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border: 1px solid var(--panel-line);
+    border-radius: 6px;
+    background: var(--panel-bg);
+    color: var(--ink);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+  }
+  .fam-del:active { opacity: 0.6; }
   .family-name .hue-tag {
+    margin-left: 8px;
     font-size: 12px;
     color: var(--ink-dim);
     font-weight: 400;
@@ -578,29 +594,27 @@
 </div>
 
 <div class="reference" id="reference">
-  <div class="section-title">Справочник</div>
-  <div class="section-sub">Все семейства целиком — нажми на плашку, чтобы посмотреть значение</div>
   <div id="allFamilies"></div>
 </div>
 
 <script>
 const DATA = {
   text: {
-    "AZURE_1": { hue:204, list:["E3F4FF:241","D8F0FF:236","CEECFF:231","C4E8FF:226","BAE4FF:221","B0E0FF:216","A6DCFF:211","9CD8FF:206","92D4FF:201","88D0FF:196"] },
-    "AZURE_2": { hue:210, list:["E6F3FF:241","DEEEFF:236","D5EAFF:231","CCE6FF:226","C3E1FF:221","BBDDFF:216","B2D8FF:211","A9D4FF:206","A0D0FF:201","98CBFF:196"] },
-    "BEIGE": { hue:40, list:["F6F1E5:241","F3EBDC:236","F0E6D3:231","EDE1C9:226","EADCC0:221","E7D7B7:216","E4D2AE:211","E1CDA4:206","DEC79B:201","DBC292:196"] },
-    "BLUE": { hue:240, list:["DADAFF:221","D5D5FF:216","D0D0FF:211","CACAFF:206","C5C5FF:201","BFBFFF:196","BABAFF:191","B5B5FF:186","AFAFFF:181","AAAAFF:176"] },
-    "CYAN": { hue:180, list:["C6FFFF:243","B9FFFF:240","ACFFFF:237","9FFFFF:235","91FFFF:232","84FFFF:229","77FFFF:226","6AFFFF:223","5CFFFF:220","4FFFFF:218"] },
-    "GREEN": { hue:120, list:["D4FFD4:243","CAFFCA:240","C1FFC1:237","B8FFB8:235","AEFFAE:232","A5FFA5:229","9CFF9C:227","92FF92:224","89FF89:221","80FF80:219"] },
-    "HERB": { hue:91, list:["E5FFCE:246","D7FFB2:241","D3FAAF:236","CEF4AB:231","CAEFA7:226","C6EAA4:221","C1E4A0:216","BDDF9C:211","B8DA99:206","B4D596:201"] },
-    "MINT": { hue:155, list:["CDFFEA:243","BFFFE5:240","B1FFDF:236","A3FFD9:233","95FFD3:229","87FFCD:226","79FFC7:222","6BFFC1:219","5DFFBC:216","4FFFB6:212"] },
-    "OLIVE": { hue:70, list:["EAEFD4:236","E5EBC9:231","E0E6BE:226","DAE2B3:221","D5DEA8:216","CFDA9C:211","CAD591:206","C5D186:201","BFCD7B:196","BAC970:191"] },
-    "ORANGE": { hue:39, list:["FFF0D4:241","FFEAC4:236","FFE5B5:231","FFDFA6:226","FFDA96:221","FFD587:216","FFCF77:211","FFCA68:206","FFC459:201","FFBF49:196"] },
-    "RED": { hue:0, list:["FFEDED:241","FFE7E7:236","FFE1E1:231","FFDADA:226","FFD4D4:221","FFCDCD:216","FFC7C7:211","FFC1C1:206","FFBABA:201","FFB4B4:196"] },
-    "ROSE": { hue:335, list:["FFF3F8:246","FFEDF4:241","FFE6F0:236","FFDFED:231","FFD9E9:226","FFD2E5:221","FFCCE1:216","FFC5DD:211","FFBED9:206","FFB8D5:201"] },
-    "SALAT": { hue:90, list:["EAFFD4:247","E4FFC8:245","DEFFBC:243","D8FFB0:241","D2FFA4:239","CCFF98:237","C6FF8C:235","C0FF80:232","BAFF74:230","B4FF69:228"] },
-    "YELLOW": { hue:60, list:["FFFFD4:252","FFFFC8:251","FFFFBC:250","FFFFB0:249","FFFFA4:248","FFFF98:248","FFFF8C:247","FFFF80:246","FFFF74:245","FFFF69:244"] },
-    "YELLOW_W": { hue:50, list:["FCF7DC:246","FBF2C9:241","F9EEB5:236","F7E9A2:231","F6E58E:226","F4E07B:221","F3DB67:216","F1D754:211","F0D240:206","EECE2D:201"] },
+    "RED": { hue:0, list:["FFE5E5:242","FFDBDB:237","FFD1D1:232","FFC7C7:227","FFBFBF:223","FFB5B5:218","FFABAB:213","FFA1A1:208"] },
+    "BEIGE": { hue:40, list:["F3EADD:232","F0E3D1:224","ECDBC4:216","E8D4B9:208","E3CDAD:200","E0C5A1:192","DCBE94:184","D8B789:176"] },
+    "LIGHT_BLUE": { hue:220, list:["D1E0FF:232","C7DAFF:227","BDD3FF:222","B3CCFF:217","ABC7FF:213","A1C0FF:208","97BAFF:203","8DB3FF:198"] },
+    "CYAN": { hue:180, list:["D5FFFF:234","C9FFFF:228","BFFFFF:223","B3FFFF:217","A7FFFF:211","9BFFFF:205","91FFFF:200","85FFFF:194"] },
+    "YELLOW": { hue:60, list:["FBF7CD:228","FAF5BE:220","F9F2AF:212","F7F0A1:204","F6EE92:196","F5EB83:188","F4E974:180","F3E765:172"] },
+    "PEACH": { hue:20, list:["FFE8DD:238","FFE0D1:232","FFDAC7:227","FFD2BB:221","FFCAAF:215","FFC2A3:209","FFBB99:204","FFB38D:198"] },
+    "ORANGE": { hue:39, list:["FFF5E1:240","FFEFD1:232","FFEAC3:225","FFE4B3:217","FFDFA3:209","FFD993:201","FFD485:194","FFCF75:186"] },
+    "AZURE": { hue:200, list:["D5F1FF:234","C7ECFF:227","BBE8FF:221","ADE4FF:214","9FDFFF:207","91DAFF:200","85D6FF:194","77D2FF:187"] },
+    "ROSE": { hue:335, list:["FFE5F6:242","FFDDF4:238","FFD7F2:235","FFCFEF:231","FFC9ED:228","FFC1EA:224","FFBBE8:221","FFB3E6:217"] },
+    "BLUE": { hue:240, list:["D9D9FF:236","D3D3FF:233","CBCBFF:229","C5C5FF:226","BFBFFF:223","B9B9FF:220","B1B1FF:216","ABABFF:213"] },
+    "PURPLE": { hue:280, list:["F4DDFF:238","F2D7FF:235","F0D3FF:233","EECDFF:230","ECC7FF:227","EAC1FF:224","E9BDFF:222","E7B7FF:219"] },
+    "SALAT": { hue:90, list:["DCF8C0:220","D7F7B7:215","D3F6B0:211","CEF5A7:206","CAF4A0:202","C5F397:197","C1F38F:193","BCF286:188"] },
+    "OLIVE": { hue:70, list:["E5EEBA:212","E2EBB1:206","DFE9A9:201","DBE79F:195","D7E595:189","D4E28C:183","D1E084:178","CDDE7A:172"] },
+    "GREEN": { hue:120, list:["D6FAD6:232","CDF9CD:227","C5F9C5:223","BCF8BC:218","B5F7B5:214","ACF6AC:209","A5F5A5:205","9CF49C:200"] },
+    "MINT": { hue:155, list:["D9FFEF:236","CFFFEB:231","C7FFE8:227","BDFFE4:222","B5FFE0:218","ABFFDC:213","A3FFD9:209","99FFD5:204"] },
   },
   bg: {
     "Azure_1": { hue:205, list:["001422:17","001A2B:22","001F33:26","00253D:31","002B47:36","003151:41","00375B:46"] },
@@ -679,7 +693,8 @@ function loadState(){
       savedCombos: (Array.isArray(parsed.savedCombos) ? parsed.savedCombos : []).map(normalizeSavedCombo),
       placeholderSettings: parsed.placeholderSettings || null,
       lastSizing: parsed.lastSizing || null,
-      sizingDefaultsVersion: parsed.sizingDefaultsVersion || null
+      sizingDefaultsVersion: parsed.sizingDefaultsVersion || null,
+      removed: parsed.removed || null
     };
   } catch(e){
     return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null, sizingDefaultsVersion: null };
@@ -694,7 +709,8 @@ function saveState(){
       savedCombos: state.savedCombos,
       placeholderSettings: state.placeholderSettings,
       lastSizing: state.lastSizing,
-      sizingDefaultsVersion: state.sizingDefaultsVersion
+      sizingDefaultsVersion: state.sizingDefaultsVersion,
+      removed: state.removed
     }));
   } catch(e){ /* quota exceeded etc */ }
 }
@@ -716,6 +732,22 @@ if (!state.placeholderSettings) {
   state.placeholderSettings = defaultFrameSettings(null, PLACEHOLDER_IMG);
 }
 let markedForDelete = new Set();
+
+function applyRemovals(){
+  if (!state.removed) state.removed = {};
+  ["text","bg"].forEach(k => {
+    const r = state.removed[k] || (state.removed[k] = {});
+    r.families = r.families || [];
+    r.families.forEach(n => { delete DATA[k][n]; });
+  });
+}
+function sanitizeFrameFamilies(f){
+  if (f.bgFamily && !DATA.bg[f.bgFamily]) { f.bgFamily = null; if (!f.bgCustomHex) f.bgCustomHex = "#000000"; }
+  if (f.fgFamily && !DATA.text[f.fgFamily]) { f.fgFamily = null; if (!f.fgCustomHex) f.fgCustomHex = "#FFFFFF"; }
+}
+applyRemovals();
+state.frames.forEach(sanitizeFrameFamilies);
+sanitizeFrameFamilies(state.placeholderSettings);
 
 function activeFrame(){
   const f = state.frames.find(fr => fr.id === state.activeFrameId);
@@ -745,9 +777,18 @@ function currentFgHex(){
   return hexOf(list[idx]);
 }
 
+const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+function namesAlpha(obj){
+  return Object.keys(obj).sort((a, b) => NAME_COLLATOR.compare(a, b));
+}
 function populateSelect(sel, obj, onChange){
   sel.innerHTML = "";
-  Object.keys(obj).forEach(name => {
+  const ph = document.createElement("option");
+  ph.value = "";
+  ph.textContent = "Выбрать…";
+  ph.disabled = true;
+  sel.appendChild(ph);
+  namesAlpha(obj).forEach(name => {
     const opt = document.createElement("option");
     opt.value = name;
     opt.textContent = name;
@@ -757,7 +798,7 @@ function populateSelect(sel, obj, onChange){
 }
 function populateFsSelect(sel, obj, onFamily, onCustom){
   sel.innerHTML = "";
-  Object.keys(obj).forEach(name => {
+  namesAlpha(obj).forEach(name => {
     const opt = document.createElement("option");
     opt.value = name;
     opt.textContent = name;
@@ -863,7 +904,7 @@ function syncBgUI(){
   const f = activeFrame();
   const bgSelEl = document.getElementById("bgFamilySelect");
   const bgFsSelEl = document.getElementById("bgFsSelect");
-  if (f.bgFamily && bgSelEl) bgSelEl.value = f.bgFamily;
+  if (bgSelEl) bgSelEl.value = f.bgFamily || "";
   if (bgFsSelEl) bgFsSelEl.value = f.bgCustomHex ? "__custom__" : (f.bgFamily || "__custom__");
   refreshBgSwatches();
   refreshBgFsSwatches();
@@ -876,7 +917,7 @@ function syncFgUI(){
   const f = activeFrame();
   const fgSelEl = document.getElementById("fgFamilySelect");
   const fgFsSelEl = document.getElementById("fgFsSelect");
-  if (f.fgFamily && fgSelEl) fgSelEl.value = f.fgFamily;
+  if (fgSelEl) fgSelEl.value = f.fgFamily || "";
   if (fgFsSelEl) fgFsSelEl.value = f.fgCustomHex ? "__custom__" : (f.fgFamily || "__custom__");
   refreshFgSwatches();
   refreshFgFsSwatches();
@@ -1403,19 +1444,77 @@ document.getElementById("deleteMarkedBtn").addEventListener("click", () => {
 /* ---------- family selects (main + fullscreen) ---------- */
 const bgSel = document.getElementById("bgFamilySelect");
 const fgSel = document.getElementById("fgFamilySelect");
-populateSelect(bgSel, DATA.bg, setBgFamily);
-populateSelect(fgSel, DATA.text, setFgFamily);
-
 const bgFsSel = document.getElementById("bgFsSelect");
 const fgFsSel = document.getElementById("fgFsSelect");
-populateFsSelect(bgFsSel, DATA.bg, setBgFamily, () => {
-  document.getElementById("bgFsCustomWrap").style.display = "block";
-  document.getElementById("bgCustomColorFS").click();
-});
-populateFsSelect(fgFsSel, DATA.text, setFgFamily, () => {
-  document.getElementById("fgFsCustomWrap").style.display = "block";
-  document.getElementById("fgCustomColorFS").click();
-});
+function buildSelects(){
+  populateSelect(bgSel, DATA.bg, setBgFamily);
+  populateSelect(fgSel, DATA.text, setFgFamily);
+  populateFsSelect(bgFsSel, DATA.bg, setBgFamily, () => {
+    document.getElementById("bgFsCustomWrap").style.display = "block";
+    document.getElementById("bgCustomColorFS").click();
+  });
+  populateFsSelect(fgFsSel, DATA.text, setFgFamily, () => {
+    document.getElementById("fgFsCustomWrap").style.display = "block";
+    document.getElementById("fgCustomColorFS").click();
+  });
+}
+buildSelects();
+
+/* ---------- deleting families (from the reference) ---------- */
+function allFrames(){ return state.frames.concat([state.placeholderSettings]); }
+function kindKeys(kind){
+  return kind === "bg"
+    ? { data: "bg", fam: "bgFamily", idx: "bgIndex", custom: "bgCustomHex" }
+    : { data: "text", fam: "fgFamily", idx: "fgIndex", custom: "fgCustomHex" };
+}
+function frameHex(fr, K){
+  if (fr[K.custom]) return fr[K.custom];
+  const list = DATA[K.data][fr[K.fam]].list;
+  return hexOf(list[clampIndex(fr[K.idx], list.length)]);
+}
+function confirmBanner(text, onYes){
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;";
+  const box = document.createElement("div");
+  box.style.cssText = "background:#161616;border:1px solid #2e2e2e;border-radius:12px;padding:20px;max-width:360px;width:100%;color:#ececec;font-size:16px;";
+  const msg = document.createElement("div");
+  msg.textContent = text;
+  msg.style.marginBottom = "18px";
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:10px;justify-content:flex-end;";
+  const no = document.createElement("button");
+  no.className = "btn"; no.type = "button"; no.textContent = "Отмена";
+  const yes = document.createElement("button");
+  yes.className = "btn"; yes.type = "button"; yes.textContent = "Удалить";
+  yes.style.borderColor = "#a33"; yes.style.color = "#ff8a8a";
+  const close = () => ov.remove();
+  no.onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  yes.onclick = () => { close(); onYes(); };
+  row.appendChild(no); row.appendChild(yes);
+  box.appendChild(msg); box.appendChild(row);
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+}
+function deleteFamily(kind, name){
+  const K = kindKeys(kind);
+  if (!DATA[K.data][name]) return;
+  confirmBanner("Удалить семейство «" + name + "» целиком?", () => {
+    allFrames().forEach(fr => {
+      if (fr[K.fam] === name) {
+        if (!fr[K.custom]) fr[K.custom] = frameHex(fr, K);
+        fr[K.fam] = null;
+      }
+    });
+    delete DATA[K.data][name];
+    const r = state.removed[K.data];
+    if (!r.families.includes(name)) r.families.push(name);
+    buildSelects();
+    saveState();
+    syncBgUI(); syncFgUI(); updateStage();
+    buildReference();
+  });
+}
 
 document.getElementById("bgCustomColor").addEventListener("input", (e) => setBgCustom(e.target.value));
 document.getElementById("bgCustomColorFS").addEventListener("input", (e) => setBgCustom(e.target.value));
@@ -1471,6 +1570,7 @@ function namesByHue(obj){
 
 function buildReference(){
   const wrap = document.getElementById("allFamilies");
+  wrap.innerHTML = "";
 
   const textHeader = document.createElement("div");
   textHeader.className = "section-title";
@@ -1479,7 +1579,7 @@ function buildReference(){
   wrap.appendChild(textHeader);
 
   namesByHue(DATA.text).forEach(name => {
-    wrap.appendChild(familyBlock(name, DATA.text[name]));
+    wrap.appendChild(familyBlock(name, DATA.text[name], "fg"));
   });
 
   const bgHeader = document.createElement("div");
@@ -1489,17 +1589,23 @@ function buildReference(){
   wrap.appendChild(bgHeader);
 
   namesByHue(DATA.bg).forEach(name => {
-    wrap.appendChild(familyBlock(name, DATA.bg[name]));
+    wrap.appendChild(familyBlock(name, DATA.bg[name], "bg"));
   });
 }
 
-function familyBlock(name, fam){
+function familyBlock(name, fam, kind){
   const block = document.createElement("div");
   block.className = "family-block";
 
   const label = document.createElement("div");
   label.className = "family-name";
-  label.innerHTML = name + (fam.hue !== null ? ('<span class="hue-tag">hue ' + fam.hue + '°</span>') : '<span class="hue-tag">нейтральный</span>');
+  label.innerHTML = '<span style="line-height:1;">' + name + (fam.hue !== null ? ('<span class="hue-tag">hue ' + fam.hue + '°</span>') : '<span class="hue-tag">нейтральный</span>') + '</span>';
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "fam-del";
+  del.textContent = "✕";
+  del.onclick = () => deleteFamily(kind, name);
+  label.appendChild(del);
   block.appendChild(label);
 
   const strip = document.createElement("div");
