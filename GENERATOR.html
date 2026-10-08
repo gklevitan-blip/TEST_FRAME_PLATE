@@ -271,6 +271,7 @@
     </div>
     <div class="right-actions">
       <button id="selectAllBtn" onclick="selectAllSets()">Выбрать все</button>
+      <button onclick="sendToTest()">В TEST</button>
       <button onclick="downloadSelectedTxt()">Создать txt</button>
       <button id="clearAllBtn" onclick="confirmClearAll()" disabled>Очистить</button>
     </div>
@@ -305,7 +306,7 @@ function onStartLBlur(el){
   if(el.value === '') return;
   if(!validStartL(parseFloat(el.value))) showToast(startLMsg());
 }
-function fallbackName(hue){ return mode === 'plates' ? `PLATE_${hue}` : `HUE_${hue}`; }
+function fallbackName(hue){ return mode === 'plates' ? `Plate_${hue}` : `FONT_${hue}`; }
 function zipName(){ return mode === 'plates' ? 'HUE_Plate.zip' : 'HUE_Font.zip'; }
 let lastRows = null;
 let lastRowsOriginal = null;
@@ -640,6 +641,43 @@ function downloadSelectedTxt(){
     console.error('Не удалось создать zip:', e);
     showToast('Ошибка при создании архива.');
   });
+}
+
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  let ok = false;
+  try{ ok = document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(!ok) throw new Error('copy failed');
+}
+function copyText(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  try{ fallbackCopy(text); return Promise.resolve(); }catch(e){ return Promise.reject(e); }
+}
+function sendToTest(){
+  if(hasUnsavedEdit()){
+    showToast('Есть несохранённые изменения — нажмите OK или снимите галку.');
+    return;
+  }
+  const chosen = sets.filter(s => s.selected);
+  if(!chosen.length){ showToast('Ничего не отмечено.'); return; }
+  const payload = {
+    type: 'obojm_to_test',
+    kind: mode === 'plates' ? 'bg' : 'text',
+    families: chosen.map(s => ({
+      name: (s.name ? s.name : fallbackName(s.hue)).trim(),
+      hue: Number(s.hue),
+      params: (summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + (s.refMode === 'safe' ? ' (изменен по референсу)' : '') + (s.editTag ? ' — ' + s.editTag : '')).replace(/<[^>]*>/g, ''),
+      list: s.rows.map(r => String(r.hex).replace('#','').toUpperCase() + ':' + r.L)
+    }))
+  };
+  copyText(JSON.stringify(payload))
+    .then(() => showToast('Скопировано: ' + chosen.length))
+    .catch(() => showToast('Не удалось скопировать.'));
 }
 
 function afterDownloadSelected(){
