@@ -167,7 +167,15 @@
       <div id="refOut"></div>
     </div>
 
-    <div id="massBlock" class="panel">
+    <div id="refFontBlock" class="panel hidden">
+      <h2>Референсный FONT</h2>
+      <div class="row">
+        <div><label>Hue (°)</label><input type="number" id="refFontHue" min="0" max="360" oninput="onRefFontChange()" onchange="onRefFontChange(true)"></div>
+      </div>
+      <div id="refFontOut"></div>
+    </div>
+
+    <div id="massBlock" class="panel hidden">
       <div class="btn-row" style="margin-top:0;">
         <button class="primary" onclick="createForAllHues()">Создать для всех hue</button>
       </div>
@@ -196,6 +204,13 @@
           Контраст plate
         </label>
         <input type="number" id="plateIdx" value="4" min="1" max="7" step="1" style="width:56px;" oninput="onPlateChange()" onchange="normalizePlateIdx()">
+      </div>
+      <div id="fontBox" class="hidden" style="display:flex; align-items:center; gap:8px;">
+        <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
+          <input type="checkbox" id="fontChk" onchange="onPlateChange()">
+          Контраст FONT
+        </label>
+        <input type="number" id="fontIdx" value="1" min="1" step="1" style="width:56px;" oninput="onPlateChange()" onchange="normalizeFontIdx()">
       </div>
     </div>
   </div>
@@ -526,12 +541,64 @@ function normalizePlateIdx(){
   onPlateChange();
 }
 
+/* ---------- Референсный FONT (режим Plates): контраст плашек относительно оттенка готового шрифтового семейства ---------- */
+const FONT_SETS_KEY = 'generator_obojm_sets_v1';
+const REF_FONT_KEY = 'generator_obojm_ref_font_hue_v1';
+let lastFontIdx = 1;
+function findRefFontSet(){
+  const inp = document.getElementById('refFontHue');
+  if(!inp || inp.value === '') return null;
+  const h = parseFloat(inp.value);
+  if(isNaN(h)) return null;
+  try{
+    const raw = localStorage.getItem(FONT_SETS_KEY);
+    if(!raw) return null;
+    const data = JSON.parse(raw);
+    if(!data || !Array.isArray(data.sets)) return null;
+    const cand = data.sets.filter(s => Number(s.hue) === h && Array.isArray(s.rows) && s.rows.length);
+    if(!cand.length) return null;
+    return cand.reduce((a, b) => (b.id > a.id ? b : a));
+  }catch(e){ return null; }
+}
+function fontIndex(){
+  const fs = findRefFontSet();
+  const max = fs ? fs.rows.length : 1;
+  const v = parseInt(document.getElementById('fontIdx').value);
+  if(!isNaN(v)) lastFontIdx = Math.max(1, v);
+  return Math.min(lastFontIdx, max);
+}
+function contrastOnFont(hex){
+  const fs = findRefFontSet();
+  if(!fs) return 0;
+  const a = relLum(hex), b = relLum(fs.rows[fontIndex()-1].hex);
+  return (Math.max(a,b)+0.05) / (Math.min(a,b)+0.05);
+}
+function contrastRef(hex){ return mode === 'plates' ? contrastOnFont(hex) : contrastOnPlate(hex); }
+function normalizeFontIdx(){
+  document.getElementById('fontIdx').value = fontIndex();
+  onPlateChange();
+}
+function onRefFontChange(final){
+  const inp = document.getElementById('refFontHue');
+  try{ localStorage.setItem(REF_FONT_KEY, inp.value); }catch(e){}
+  const fs = findRefFontSet();
+  const out = document.getElementById('refFontOut');
+  if(fs){
+    const nm = String(fs.name || ('FONT_' + fs.hue)).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    out.innerHTML = `<div class="hint"><b>${nm}</b> — ${summaryLine(fs.hue, fs.maxVal, fs.rows, fs.sat, fs.step)}</div>`;
+  }else{
+    out.innerHTML = '';
+    if(final === true && inp.value !== '') showToast('Нет шрифтового семейства с таким hue.');
+  }
+  onPlateChange();
+}
+
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  const showCR = mode === 'fonts' && document.getElementById('plateChk').checked;
+  const showCR = (mode === 'fonts' && document.getElementById('plateChk').checked) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
   html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
   rows.forEach(r => {
-    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastOnPlate(r.hex).toFixed(1)}</td>` : '') + '</tr>';
+    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
@@ -1372,6 +1439,8 @@ function applyModeUI(){
   document.getElementById('namesTitle').textContent = title;
   document.getElementById('modeLabel').textContent = pl ? 'Plates' : 'Fonts';
   document.getElementById('plateBox').classList.toggle('hidden', pl);
+  document.getElementById('fontBox').classList.toggle('hidden', !pl);
+  document.getElementById('refFontBlock').classList.toggle('hidden', !pl);
   document.getElementById('genStep').value = pl ? 5 : 8;
   document.getElementById('genCount').value = pl ? 7 : 8;
 }
@@ -1412,6 +1481,8 @@ loadSets();
 renderSets();
 loadNames();
 applyModeUI();
+try{ const v = localStorage.getItem(REF_FONT_KEY); if(v !== null) document.getElementById('refFontHue').value = v; }catch(e){}
+onRefFontChange();
 </script>
 </body>
 </html>
