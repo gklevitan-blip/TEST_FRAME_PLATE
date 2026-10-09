@@ -169,8 +169,10 @@
 
     <div id="refFontBlock" class="panel hidden">
       <h2>Референсный FONT</h2>
-      <div class="row">
+      <div class="row" style="align-items:flex-end; flex-wrap:nowrap;">
         <div><label>Hue (°)</label><input type="number" id="refFontHue" min="0" max="360" oninput="onRefFontChange()" onchange="onRefFontChange(true)"></div>
+        <div style="flex:0 0 80px; min-width:70px;"><label>Дефолт</label><input type="number" id="refFontDef" value="1" min="1" step="1" oninput="onRefFontDefChange()" onchange="onRefFontDefChange()"></div>
+        <div style="flex:0 0 auto; min-width:0;"><button type="button" class="primary" onclick="clearRefFont()">Очистить</button></div>
       </div>
       <div id="refFontOut"></div>
     </div>
@@ -488,6 +490,7 @@ function buildTable(){
 
   lastRowsOriginal = rows;
   lastRows = rows;
+  resetFontIdxToDefault();
   lastHue = hue;
   lastMaxVal = maxVal;
   lastSat = sat;
@@ -578,8 +581,27 @@ function normalizeFontIdx(){
   document.getElementById('fontIdx').value = fontIndex();
   onPlateChange();
 }
+const REF_FONT_DEF_KEY = 'generator_obojm_ref_font_def_v1';
+function fontDefault(){
+  const v = parseInt(document.getElementById('refFontDef').value);
+  return isNaN(v) ? 1 : Math.max(1, v);
+}
+function resetFontIdxToDefault(){
+  lastFontIdx = fontDefault();
+  document.getElementById('fontIdx').value = lastFontIdx;
+}
+function onRefFontDefChange(){
+  try{ localStorage.setItem(REF_FONT_DEF_KEY, document.getElementById('refFontDef').value); }catch(e){}
+  resetFontIdxToDefault();
+  onPlateChange();
+}
+function clearRefFont(){
+  document.getElementById('refFontHue').value = '';
+  onRefFontChange();
+}
 function onRefFontChange(final){
   const inp = document.getElementById('refFontHue');
+  resetFontIdxToDefault();
   try{ localStorage.setItem(REF_FONT_KEY, inp.value); }catch(e){}
   const fs = findRefFontSet();
   const out = document.getElementById('refFontOut');
@@ -1481,6 +1503,7 @@ loadSets();
 renderSets();
 loadNames();
 applyModeUI();
+try{ const d = localStorage.getItem(REF_FONT_DEF_KEY); if(d !== null && d !== '') document.getElementById('refFontDef').value = d; }catch(e){}
 try{ const v = localStorage.getItem(REF_FONT_KEY); if(v !== null) document.getElementById('refFontHue').value = v; }catch(e){}
 onRefFontChange();
 </script>
