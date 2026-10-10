@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" href="icon_test_frame_plate.png">
 <link rel="apple-touch-icon" href="icon_test_frame_plate.png">
 <meta name="theme-color" content="#17334F">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   html { color-scheme: dark; background: #0c0c0c; min-height: 100%; }
   :root {
@@ -481,6 +482,22 @@
     .main-layout { flex-direction: column; }
     .left-col { width: 100%; }
   }
+
+  .fam-check {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    margin: 0 0 0 18px;
+    cursor: pointer;
+    accent-color: #2f7de1;
+  }
+  .toast {
+    position: fixed; left: 50%; top: 24px; transform: translateX(-50%) translateY(-10px);
+    background: #2a2d33; color: var(--ink); border: 1px solid var(--panel-line); border-radius: 8px;
+    padding: 10px 16px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    opacity: 0; transition: opacity .2s ease, transform .2s ease; pointer-events: none; z-index: 9999;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -592,6 +609,8 @@
 <div class="reference" id="reference">
   <div id="allFamilies"></div>
 </div>
+
+<div id="toast" class="toast"></div>
 
 <script>
 const DATA = {
@@ -1564,13 +1583,39 @@ function namesByHue(obj){
 function buildReference(){
   const wrap = document.getElementById("allFamilies");
   wrap.innerHTML = "";
+  pruneSelectedFams();
+
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;";
 
   const impBtn = document.createElement("button");
-  impBtn.type = "button"; impBtn.className = "btn left-col";
-  impBtn.style.cssText = "display:block;padding:16px 13px;font-size:16px;font-weight:600;white-space:nowrap;";
+  impBtn.type = "button"; impBtn.className = "btn";
+  impBtn.style.cssText = "display:block;width:180px;flex-shrink:0;padding:16px 13px;font-size:16px;font-weight:600;white-space:nowrap;";
   impBtn.textContent = "ИМПОРТ";
   impBtn.onclick = importFromClipboard;
-  wrap.appendChild(impBtn);
+  btnRow.appendChild(impBtn);
+
+  const expBtn = document.createElement("button");
+  expBtn.type = "button"; expBtn.className = "btn";
+  expBtn.style.cssText = "display:block;width:180px;flex-shrink:0;padding:16px 13px;font-size:16px;font-weight:600;white-space:nowrap;";
+  expBtn.id = "exportFamsBtn";
+  expBtn.textContent = "ЭКСПОРТ";
+  expBtn.onclick = downloadSelectedTxt;
+  btnRow.appendChild(expBtn);
+
+  const selAllBtn = document.createElement("button");
+  selAllBtn.type = "button"; selAllBtn.className = "btn";
+  selAllBtn.id = "selectAllFamsBtn";
+  selAllBtn.style.cssText = "display:block;width:150px;flex-shrink:0;padding:11px 8px;font-size:13px;white-space:nowrap;";
+  selAllBtn.textContent = "Выделить все";
+  selAllBtn.onclick = selectAllFams;
+  btnRow.appendChild(selAllBtn);
+
+  const selFgBtn = makeKindSelBtn("fg");
+  selFgBtn.style.marginLeft = "auto";
+  btnRow.appendChild(selFgBtn);
+
+  wrap.appendChild(btnRow);
 
   const textHeader = document.createElement("div");
   textHeader.className = "section-title";
@@ -1583,15 +1628,23 @@ function buildReference(){
     wrap.appendChild(familyBlock(name, DATA.text[name], "fg"));
   });
 
+  const bgRow = document.createElement("div");
+  bgRow.style.cssText = "display:flex;gap:10px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-top:32px;margin-bottom:20px;";
   const bgHeader = document.createElement("div");
   bgHeader.className = "section-title";
   bgHeader.style.fontSize = "16px";
+  bgHeader.style.margin = "0";
   bgHeader.textContent = "Фоновые семейства (плашки)";
-  wrap.appendChild(bgHeader);
+  bgRow.appendChild(bgHeader);
+  const selBgBtn = makeKindSelBtn("bg");
+  selBgBtn.style.marginLeft = "auto";
+  bgRow.appendChild(selBgBtn);
+  wrap.appendChild(bgRow);
 
   namesByHue(DATA.bg).forEach(name => {
     wrap.appendChild(familyBlock(name, DATA.bg[name], "bg"));
   });
+  updateSelectAllBtn();
 }
 
 function familyBlock(name, fam, kind){
@@ -1624,9 +1677,19 @@ function familyBlock(name, fam, kind){
   ren.textContent = "✎";
   ren.style.fontSize = "18px";
   ren.onclick = () => renameFamily(kind, name);
-  del.style.marginLeft = "0";
+  del.style.marginLeft = "18px";
   label.appendChild(ren);
   label.appendChild(del);
+  const chk = document.createElement("input");
+  chk.type = "checkbox";
+  chk.className = "fam-check";
+  chk.dataset.key = famKey(kind, name);
+  chk.checked = selectedFams.has(chk.dataset.key);
+  chk.onchange = () => {
+    if (chk.checked) selectedFams.add(chk.dataset.key); else selectedFams.delete(chk.dataset.key);
+    updateSelectAllBtn();
+  };
+  label.appendChild(chk);
   block.appendChild(label);
 
   const strip = document.createElement("div");
@@ -1786,6 +1849,227 @@ async function renameFamily(kind, oldName){
   allFrames().forEach(fr => { if (fr[K.fam] === oldName) fr[K.fam] = finalName; });
   refreshAfterFamilyChange();
 }
+
+/* ---------- export selected families to txt (как в Генераторе) ---------- */
+const selectedFams = new Set();
+function famKey(kind, name){ return kind + "|" + name; }
+function allFamKeys(){
+  return Object.keys(DATA.text).map(n => famKey("fg", n)).concat(Object.keys(DATA.bg).map(n => famKey("bg", n)));
+}
+function pruneSelectedFams(){
+  const valid = new Set(allFamKeys());
+  Array.from(selectedFams).forEach(k => { if (!valid.has(k)) selectedFams.delete(k); });
+}
+function kindKeys(kind){
+  return allFamKeys().filter(k => k.indexOf(kind + "|") === 0);
+}
+function makeKindSelBtn(kind){
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "btn";
+  b.id = "selectAll_" + kind + "_Btn";
+  b.style.cssText = "display:block;width:150px;flex-shrink:0;padding:11px 8px;font-size:13px;white-space:nowrap;";
+  b.textContent = kind === "fg" ? "Выбрать все fonts" : "Выбрать все plates";
+  b.onclick = () => selectAllKind(kind);
+  return b;
+}
+function selectAllKind(kind){
+  const keys = kindKeys(kind);
+  if (!keys.length) return;
+  const any = keys.some(k => selectedFams.has(k));
+  if (any) keys.forEach(k => selectedFams.delete(k)); else keys.forEach(k => selectedFams.add(k));
+  syncFamChecks();
+}
+function updateSelectAllBtn(){
+  const btn = document.getElementById("selectAllFamsBtn");
+  if (btn){
+    const keys = allFamKeys();
+    const any = keys.some(k => selectedFams.has(k));
+    btn.textContent = any ? "Снять выделения" : "Выделить все";
+  }
+  ["fg", "bg"].forEach(kind => {
+    const b = document.getElementById("selectAll_" + kind + "_Btn");
+    if (!b) return;
+    const keys = kindKeys(kind);
+    const any = keys.some(k => selectedFams.has(k));
+    b.textContent = any ? "Снять выделения" : (kind === "fg" ? "Выбрать все fonts" : "Выбрать все plates");
+  });
+}
+function syncFamChecks(){
+  document.querySelectorAll(".fam-check").forEach(c => { c.checked = selectedFams.has(c.dataset.key); });
+  updateSelectAllBtn();
+}
+function selectAllFams(){
+  const keys = allFamKeys();
+  if (!keys.length) return;
+  const any = keys.some(k => selectedFams.has(k));
+  if (any) selectedFams.clear(); else keys.forEach(k => selectedFams.add(k));
+  syncFamChecks();
+}
+
+let toastTimer = null;
+function showToast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+const LAB_Xn = 0.95047, LAB_Yn = 1.0, LAB_Zn = 1.08883;
+function srgbToLinear(c){
+  c = c / 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function rgbToXyz(r, g, b){
+  const rl = srgbToLinear(r), gl = srgbToLinear(g), bl = srgbToLinear(b);
+  return [
+    0.4124564 * rl + 0.3575761 * gl + 0.1804375 * bl,
+    0.2126729 * rl + 0.7151522 * gl + 0.0721750 * bl,
+    0.0193339 * rl + 0.1191920 * gl + 0.9503041 * bl
+  ];
+}
+function fLab(t){
+  const d = 6 / 29;
+  return t > d * d * d ? Math.cbrt(t) : t / (3 * d * d) + 4 / 29;
+}
+function labC(r, g, b){
+  const [X, Y, Z] = rgbToXyz(r, g, b);
+  const fx = fLab(X / LAB_Xn), fy = fLab(Y / LAB_Yn), fz = fLab(Z / LAB_Zn);
+  const a = 500 * (fx - fy);
+  const bb = 200 * (fy - fz);
+  return Math.sqrt(a * a + bb * bb);
+}
+function rowsToText(rows){
+  const lw = Math.max(...rows.map(r => ("L=" + r.L).length));
+  const cw = Math.max(...rows.map(r => String(Math.round(r.C)).length));
+  return rows.map(r => r.hex + "  " + ("L=" + r.L).padEnd(lw) + "  C° " + String(Math.round(r.C)).padStart(cw)).join("\n") + "\n";
+}
+function famToText(fam){
+  const rows = fam.list.map(e => {
+    const hex = hexRaw(e).toUpperCase();
+    return { hex, L: lOf(e), C: labC(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)) };
+  });
+  return rowsToText(rows);
+}
+function triggerDownload(filename, text){
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function chosenFams(){
+  const out = [];
+  namesByHue(DATA.text).forEach(n => { if (selectedFams.has(famKey("fg", n))) out.push({ kind: "fg", name: n, fam: DATA.text[n] }); });
+  namesByHue(DATA.bg).forEach(n => { if (selectedFams.has(famKey("bg", n))) out.push({ kind: "bg", name: n, fam: DATA.bg[n] }); });
+  return out;
+}
+function zipNameFor(chosen){
+  const hasFg = chosen.some(c => c.kind === "fg");
+  const hasBg = chosen.some(c => c.kind === "bg");
+  return hasFg && hasBg ? "HUE_Font_Plate.zip" : (hasBg ? "HUE_Plate.zip" : "HUE_Font.zip");
+}
+function afterDownloadSelected(){
+  selectedFams.clear();
+  syncFamChecks();
+}
+function safeFileName(s){
+  return String(s).replace(/[\\\/:*?"<>|]+/g, "_").trim();
+}
+function exportBaseName(c){
+  const kindWord = c.kind === "bg" ? "plate" : "font";
+  let tail = safeFileName(c.name || "");
+  if (!tail){
+    tail = (c.fam && c.fam.hue !== null && c.fam.hue !== undefined) ? String(c.fam.hue) : "neutral";
+  }
+  return "HUE_" + kindWord + "_" + tail;
+}
+function downloadSelectedTxt(){
+  pruneSelectedFams();
+  const chosen = chosenFams();
+  if (!chosen.length){ showToast("Ничего не отмечено."); return; }
+
+  const nFg = chosen.filter(c => c.kind === "fg").length;
+  const nBg = chosen.filter(c => c.kind === "bg").length;
+
+  if (nFg === 1 && nBg === 1){
+    showToast("Надо снять одну из двух галок.");
+    return;
+  }
+
+  // Одно семейство — просто txt без папок и архива.
+  if (chosen.length === 1){
+    chosen.forEach(c => triggerDownload(exportBaseName(c) + ".txt", famToText(c.fam)));
+    afterDownloadSelected();
+    return;
+  }
+
+  if (typeof JSZip === "undefined"){
+    // Нет сети / библиотека не загрузилась — fallback на отдельные файлы.
+    chosen.forEach(c => triggerDownload(exportBaseName(c) + ".txt", famToText(c.fam)));
+    afterDownloadSelected();
+    return;
+  }
+
+  // Тип, где семейств больше одного — папка; где одно — файл в корне архива.
+  const zip = new JSZip();
+  const folders = {
+    fg: nFg > 1 ? zip.folder("HUE_FONTS") : null,
+    bg: nBg > 1 ? zip.folder("HUE_Plates") : null
+  };
+  const usedNames = {};
+  chosen.forEach(c => {
+    if (!folders[c.kind]){
+      zip.file(exportBaseName(c) + ".txt", famToText(c.fam));
+      return;
+    }
+    let base = safeFileName(c.name || "") || String(c.fam.hue !== null ? c.fam.hue : "neutral");
+    let name = base + ".txt";
+    const uKey = c.kind + "|" + name;
+    if (usedNames[uKey] !== undefined){
+      usedNames[uKey]++;
+      name = base + "_" + usedNames[uKey] + ".txt";
+    } else {
+      usedNames[uKey] = 0;
+    }
+    folders[c.kind].file(name, famToText(c.fam));
+  });
+
+  zip.generateAsync({ type: "blob" }).then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = zipNameFor(chosen);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    afterDownloadSelected();
+  }).catch(e => {
+    console.error("Не удалось создать zip:", e);
+    showToast("Ошибка при создании архива.");
+  });
+}
+
+/* ---------- выделения не запоминаются: сбрасываются любым другим действием и при закрытии ---------- */
+function clearAllSelections(){
+  if (!selectedFams.size) return;
+  selectedFams.clear();
+  syncFamChecks();
+}
+(function(){
+  const KEEP_IDS = ["selectAllFamsBtn", "selectAll_fg_Btn", "selectAll_bg_Btn", "exportFamsBtn"];
+  function onAnyAction(e){
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest(".fam-check")) return;
+    if (KEEP_IDS.some(id => t.closest("#" + id))) return;
+    const inFams = t.closest("#allFamilies");
+    if (inFams && !t.closest("button,input,select,textarea,a,summary,label")) return;
+    clearAllSelections();
+  }
+  ["click", "input", "change"].forEach(ev => document.addEventListener(ev, onAnyAction, true));
+  window.addEventListener("pagehide", () => selectedFams.clear());
+  window.addEventListener("pageshow", e => { if (e.persisted) clearAllSelections(); });
+})();
 
 buildReference();
 </script>
