@@ -1860,7 +1860,7 @@ function pruneSelectedFams(){
   const valid = new Set(allFamKeys());
   Array.from(selectedFams).forEach(k => { if (!valid.has(k)) selectedFams.delete(k); });
 }
-function kindKeys(kind){
+function famKeysOfKind(kind){
   return allFamKeys().filter(k => k.indexOf(kind + "|") === 0);
 }
 function makeKindSelBtn(kind){
@@ -1873,7 +1873,7 @@ function makeKindSelBtn(kind){
   return b;
 }
 function selectAllKind(kind){
-  const keys = kindKeys(kind);
+  const keys = famKeysOfKind(kind);
   if (!keys.length) return;
   const any = keys.some(k => selectedFams.has(k));
   if (any) keys.forEach(k => selectedFams.delete(k)); else keys.forEach(k => selectedFams.add(k));
@@ -1889,7 +1889,7 @@ function updateSelectAllBtn(){
   ["fg", "bg"].forEach(kind => {
     const b = document.getElementById("selectAll_" + kind + "_Btn");
     if (!b) return;
-    const keys = kindKeys(kind);
+    const keys = famKeysOfKind(kind);
     const any = keys.some(k => selectedFams.has(k));
     b.textContent = any ? "Снять выделения" : (kind === "fg" ? "Выбрать все fonts" : "Выбрать все plates");
   });
