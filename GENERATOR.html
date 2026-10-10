@@ -309,10 +309,10 @@ function rowDir(){ return mode === 'plates' ? 1 : -1; }
 function startLDigits(){ return mode === 'plates' ? 2 : 3; }
 function validStartL(n){
   if(!Number.isInteger(n)) return false;
-  return mode === 'plates' ? (n >= 10 && n <= 99) : (n >= 100 && n <= 255);
+  return mode === 'plates' ? (n >= 0 && n <= 99) : (n >= 100 && n <= 255);
 }
 function startLMsg(){
-  return mode === 'plates' ? 'Plates: Старт L — двузначное число (10–99).' : 'Fonts: Старт L — трёхзначное число (100–255).';
+  return mode === 'plates' ? 'Plates: Старт L — не более двух цифр (0–99).' : 'Fonts: Старт L — трёхзначное число (100–255).';
 }
 function onStartLInput(el){
   if(el.value === '') return;
