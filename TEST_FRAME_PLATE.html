@@ -498,6 +498,9 @@
     opacity: 0; transition: opacity .2s ease, transform .2s ease; pointer-events: none; z-index: 9999;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #fgSwatches .mini, #bgSwatches .mini { border: 2px solid #8a8a8a; background-clip: padding-box; }
+  .chg-banner { background: #c62828; color: #fff; font-size: 11px; line-height: 1.3; padding: 6px 8px; border-radius: 6px; margin-bottom: 6px; display: none; }
+  .fam-mark { margin-left: 10px; font-size: 11px; font-weight: 600; color: #ff8a8a; }
 </style>
 </head>
 <body>
@@ -515,6 +518,10 @@
       <div id="frameGallery" style="margin-top:10px;"></div>
       <button id="showGalleryBtn" class="btn" style="margin-top:10px;">Выбрать</button>
       <button id="deleteMarkedBtn" class="btn" style="display:none; margin-top:8px;">🗑 Удалить</button>
+      <div id="changeBanners">
+        <div class="chg-banner" id="chgBannerPending">Есть изменения, не включенные в HTML</div>
+        <div class="chg-banner" id="chgBannerCreated">Созданный HTML не загружен на GitHub</div>
+      </div>
     </div>
 
     <div class="stage-col">
@@ -594,6 +601,7 @@
                 <div class="num-field"><label>По вертикали (Y)</label><input type="number" id="plashkaPosYNum" min="-20" max="100" step="1"></div>
               </div>
             </div>
+            <div id="buildDate" style="text-align:right;font-size:10px;color:var(--ink-dim);margin-top:10px;"></div>
           </details>
         </div>
 
@@ -653,6 +661,10 @@ const DATA = {
     "Seawave": { hue:185, list:["001517:17","001C1E:22","002124:26","00272B:31","002D31:36","003438:41","003A3F:46"] },
   }
 };
+const ARCHIVE = [
+];
+const BUILD = {"id":"b0","date":"15.10.2026"};
+const FILE_DATA = JSON.parse(JSON.stringify(DATA));
 
 const PLACEHOLDER_IMG = "data:image/svg+xml;utf8," + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#7A8C74"/></svg>'
@@ -710,7 +722,9 @@ function loadState(){
       lastSizing: parsed.lastSizing || null,
       sizingDefaultsVersion: parsed.sizingDefaultsVersion || null,
       removed: parsed.removed || null,
-      added: parsed.added || null
+      added: parsed.added || null,
+      renames: parsed.renames || null,
+      createdBuild: parsed.createdBuild || null
     };
   } catch(e){
     return { frames: [], activeFrameId: null, comboList: "", savedCombos: [], placeholderSettings: null, lastSizing: null, sizingDefaultsVersion: null };
@@ -727,7 +741,9 @@ function saveState(){
       lastSizing: state.lastSizing,
       sizingDefaultsVersion: state.sizingDefaultsVersion,
       removed: state.removed,
-      added: state.added
+      added: state.added,
+      renames: state.renames,
+      createdBuild: state.createdBuild || null
     }));
   } catch(e){ /* quota exceeded etc */ }
 }
@@ -750,6 +766,56 @@ if (!state.placeholderSettings) {
 }
 let markedForDelete = new Set();
 
+function famEqual(a, b){
+  if (!a || !b) return false;
+  const ha = (a.hue === null || a.hue === undefined) ? null : a.hue;
+  const hb = (b.hue === null || b.hue === undefined) ? null : b.hue;
+  return ha === hb && (a.params || "") === (b.params || "") && a.list.length === b.list.length && a.list.every((x, i) => x === b.list[i]);
+}
+function reconcileOverlay(){
+  if (!state.removed) state.removed = {};
+  if (!state.added) state.added = { text: {}, bg: {} };
+  if (!state.renames) state.renames = { text: {}, bg: {} };
+  ["text","bg"].forEach(k => {
+    const a = state.added[k] || (state.added[k] = {});
+    Object.keys(a).forEach(n => { if (famEqual(FILE_DATA[k][n], a[n])) delete a[n]; });
+    const r = state.removed[k] || (state.removed[k] = {});
+    r.families = (r.families || []).filter(n => FILE_DATA[k][n]);
+    const rn = state.renames[k] || (state.renames[k] = {});
+    Object.keys(rn).forEach(y => { if (!FILE_DATA[k][rn[y]]) delete rn[y]; });
+  });
+}
+function computeDiff(){
+  const res = { status: {}, changes: 0, deletions: 0 };
+  ["text","bg"].forEach(k => {
+    const rn = (state.renames && state.renames[k]) || {};
+    const srcs = {};
+    Object.keys(rn).forEach(y => { if (DATA[k][y]) srcs[rn[y]] = true; });
+    Object.keys(DATA[k]).forEach(n => {
+      const f = FILE_DATA[k][n];
+      let st = null;
+      if (!f) st = rn[n] ? "rename" : "new";
+      else if (!famEqual(f, DATA[k][n])) st = rn[n] ? "rename" : "params";
+      if (st){ res.status[k + "|" + n] = st; res.changes++; }
+    });
+    Object.keys(FILE_DATA[k]).forEach(n => {
+      if (!DATA[k][n] && !srcs[n]) res.deletions++;
+    });
+  });
+  return res;
+}
+let CUR_DIFF = { status: {}, changes: 0, deletions: 0 };
+function pendingArchive(){
+  const out = [];
+  ["text","bg"].forEach(k => {
+    Object.keys(FILE_DATA[k]).forEach(n => {
+      if (!famEqual(FILE_DATA[k][n], DATA[k][n])){
+        out.push({ id: k + "|" + n + "|" + BUILD.id, kind: k, name: n, params: FILE_DATA[k][n].params || "", date: BUILD.date });
+      }
+    });
+  });
+  return out;
+}
 function applyRemovals(){
   if (!state.removed) state.removed = {};
   ["text","bg"].forEach(k => {
@@ -767,6 +833,7 @@ function sanitizeFrameFamilies(f){
   if (f.bgFamily && !DATA.bg[f.bgFamily]) { f.bgFamily = null; if (!f.bgCustomHex) f.bgCustomHex = "#000000"; }
   if (f.fgFamily && !DATA.text[f.fgFamily]) { f.fgFamily = null; if (!f.fgCustomHex) f.fgCustomHex = "#FFFFFF"; }
 }
+reconcileOverlay();
 applyRemovals();
 state.frames.forEach(sanitizeFrameFamilies);
 sanitizeFrameFamilies(state.placeholderSettings);
@@ -1581,6 +1648,7 @@ function namesByHue(obj){
 }
 
 function buildReference(){
+  CUR_DIFF = computeDiff();
   const wrap = document.getElementById("allFamilies");
   wrap.innerHTML = "";
   pruneSelectedFams();
@@ -1588,28 +1656,20 @@ function buildReference(){
   const btnRow = document.createElement("div");
   btnRow.style.cssText = "display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;";
 
-  const impBtn = document.createElement("button");
-  impBtn.type = "button"; impBtn.className = "btn";
-  impBtn.style.cssText = "display:block;width:180px;flex-shrink:0;padding:16px 13px;font-size:16px;font-weight:600;white-space:nowrap;";
-  impBtn.textContent = "ИМПОРТ";
-  impBtn.onclick = importFromClipboard;
-  btnRow.appendChild(impBtn);
-
-  const expBtn = document.createElement("button");
-  expBtn.type = "button"; expBtn.className = "btn";
-  expBtn.style.cssText = "display:block;width:180px;flex-shrink:0;padding:16px 13px;font-size:16px;font-weight:600;white-space:nowrap;";
-  expBtn.id = "exportFamsBtn";
-  expBtn.textContent = "ЭКСПОРТ";
-  expBtn.onclick = downloadSelectedTxt;
-  btnRow.appendChild(expBtn);
-
-  const selAllBtn = document.createElement("button");
-  selAllBtn.type = "button"; selAllBtn.className = "btn";
-  selAllBtn.id = "selectAllFamsBtn";
-  selAllBtn.style.cssText = "display:block;width:150px;flex-shrink:0;padding:11px 8px;font-size:13px;white-space:nowrap;";
-  selAllBtn.textContent = "Выделить все";
-  selAllBtn.onclick = selectAllFams;
-  btnRow.appendChild(selAllBtn);
+  const topBtnStyle = "display:block;flex-shrink:0;padding:10px 14px;font-size:13px;font-weight:600;white-space:nowrap;";
+  const mkTop = (id, html, fn) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn"; b.id = id;
+    b.style.cssText = topBtnStyle; b.innerHTML = html; b.onclick = fn;
+    return b;
+  };
+  btnRow.appendChild(mkTop("importFamsBtn", "Импорт", importFromClipboard));
+  btnRow.appendChild(mkTop("exportFamsBtn", "Создать TXT", downloadSelectedTxt));
+  const cnt = [];
+  if (CUR_DIFF.changes) cnt.push("Изм. " + CUR_DIFF.changes);
+  if (CUR_DIFF.deletions) cnt.push("Удал. " + CUR_DIFF.deletions);
+  btnRow.appendChild(mkTop("bakeFamsBtn", "Создать HTML" + (cnt.length ? '<span style="display:block;font-size:10px;font-weight:400;line-height:1.3;">' + cnt.join(" · ") + "</span>" : ""), createHtmlFile));
+  btnRow.appendChild(mkTop("archiveBtn", "Архив", openArchive));
 
   const selFgBtn = makeKindSelBtn("fg");
   selFgBtn.style.marginLeft = "auto";
@@ -1645,6 +1705,7 @@ function buildReference(){
     wrap.appendChild(familyBlock(name, DATA.bg[name], "bg"));
   });
   updateSelectAllBtn();
+  refreshChangeUI();
 }
 
 function familyBlock(name, fam, kind){
@@ -1665,6 +1726,14 @@ function familyBlock(name, fam, kind){
     t.appendChild(nm);
     t.appendChild(document.createTextNode(" — " + fam.params));
     label.appendChild(t);
+  }
+  const markKey = kindKeys(kind).data + "|" + name;
+  const markSt = CUR_DIFF.status[markKey];
+  if (markSt){
+    const mk = document.createElement("span");
+    mk.className = "fam-mark";
+    mk.textContent = markSt === "new" ? "Новое" : (markSt === "rename" ? "Изменение имени" : "Изменение параметров");
+    (label.firstChild || label).appendChild(mk);
   }
   const del = document.createElement("button");
   del.type = "button";
@@ -1810,6 +1879,7 @@ async function importFamilies(text){
     const fam = { hue: Number.isFinite(f.hue) ? f.hue : null, list };
     if (typeof f.params === "string" && f.params.trim()) fam.params = f.params.trim();
     putFamily(p.kind, finalName, fam);
+    if (state.renames && state.renames[p.kind === "bg" ? "bg" : "text"]) delete state.renames[p.kind === "bg" ? "bg" : "text"][finalName];
     n++;
   }
   if (n) refreshAfterFamilyChange();
@@ -1841,6 +1911,11 @@ async function renameFamily(kind, oldName){
   }
   const fam = DATA[K.data][oldName];
   if (!fam) return;
+  if (!state.renames) state.renames = { text: {}, bg: {} };
+  const rn = state.renames[K.data] || (state.renames[K.data] = {});
+  const src = rn[oldName] || (FILE_DATA[K.data][oldName] ? oldName : null);
+  delete rn[oldName];
+  if (src) rn[finalName] = src; else delete rn[finalName];
   delete DATA[K.data][oldName];
   if (state.added && state.added[K.data]) delete state.added[K.data][oldName];
   const rf = state.removed[K.data].families;
@@ -1880,12 +1955,6 @@ function selectAllKind(kind){
   syncFamChecks();
 }
 function updateSelectAllBtn(){
-  const btn = document.getElementById("selectAllFamsBtn");
-  if (btn){
-    const keys = allFamKeys();
-    const any = keys.some(k => selectedFams.has(k));
-    btn.textContent = any ? "Снять выделения" : "Выделить все";
-  }
   ["fg", "bg"].forEach(kind => {
     const b = document.getElementById("selectAll_" + kind + "_Btn");
     if (!b) return;
@@ -1898,12 +1967,120 @@ function syncFamChecks(){
   document.querySelectorAll(".fam-check").forEach(c => { c.checked = selectedFams.has(c.dataset.key); });
   updateSelectAllBtn();
 }
-function selectAllFams(){
-  const keys = allFamKeys();
-  if (!keys.length) return;
-  const any = keys.some(k => selectedFams.has(k));
-  if (any) selectedFams.clear(); else keys.forEach(k => selectedFams.add(k));
-  syncFamChecks();
+
+/* ---------- change banners, HTML creation, archive ---------- */
+function alignBanners(){
+  const box = document.getElementById("changeBanners");
+  const stage = document.getElementById("stage");
+  if (!box || !stage || !box.parentElement) return;
+  box.style.marginTop = "12px";
+  if (!box.offsetHeight || stage.classList.contains("fs-mode")) return;
+  const left = box.parentElement.getBoundingClientRect();
+  const sb = stage.getBoundingClientRect();
+  if (sb.left < left.right) return;
+  const extra = sb.bottom - box.getBoundingClientRect().bottom;
+  if (extra > 0) box.style.marginTop = (12 + extra) + "px";
+}
+function refreshChangeUI(){
+  const total = CUR_DIFF.changes + CUR_DIFF.deletions;
+  if (state.createdBuild && (state.createdBuild === BUILD.id || !total)){
+    state.createdBuild = null;
+    saveState();
+  }
+  const b1 = document.getElementById("chgBannerPending");
+  const b2 = document.getElementById("chgBannerCreated");
+  if (b1) b1.style.display = total ? "block" : "none";
+  if (b2) b2.style.display = (total && state.createdBuild) ? "block" : "none";
+  const bd = document.getElementById("buildDate");
+  if (bd) bd.textContent = BUILD.date || "";
+  alignBanners();
+}
+window.addEventListener("resize", alignBanners);
+window.addEventListener("load", alignBanners);
+if (window.ResizeObserver) new ResizeObserver(alignBanners).observe(document.getElementById("stage"));
+
+function jsonSafe(v){ return JSON.stringify(v).replace(/</g, "\\u003c"); }
+function serializeData(){
+  const fam = f => "{ hue:" + (f.hue === null || f.hue === undefined ? "null" : f.hue)
+    + (f.params ? ", params:" + jsonSafe(f.params) : "")
+    + ", list:[" + f.list.map(x => jsonSafe(x)).join(",") + "] }";
+  const group = obj => Object.keys(obj).map(n => "    " + jsonSafe(n) + ": " + fam(obj[n]) + ",\n").join("");
+  return "const DATA = {\n  text: {\n" + group(DATA.text) + "  },\n  bg: {\n" + group(DATA.bg) + "  }\n};\n";
+}
+function serializeArchive(arr){
+  return "const ARCHIVE = [\n" + arr.map(e => "  " + jsonSafe(e) + ",\n").join("") + "];\n";
+}
+async function createHtmlFile(){
+  const d = computeDiff();
+  if (!d.changes && !d.deletions){ showToast("Нет изменений."); return; }
+  try {
+    const url = location.href.split("#")[0].split("?")[0];
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) throw new Error("fetch");
+    let src = await resp.text();
+    const dataRe = /const DATA = \{[\s\S]*?\n\};\n/;
+    if (!dataRe.test(src)) throw new Error("DATA");
+    const now = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    const date = pad(now.getDate()) + "." + pad(now.getMonth() + 1) + "." + now.getFullYear();
+    const id = "b" + Date.now().toString(36);
+    const arch = ARCHIVE.concat(pendingArchive());
+    src = src.replace(/const ARCHIVE = \[[\s\S]*?\n\];\n/, "").replace(/const BUILD = \{[^\n]*\};\n/, "").replace(/const FILE_DATA = [^\n]*\n/, "");
+    src = src.replace(dataRe, () => serializeData() + serializeArchive(arch) + "const BUILD = " + jsonSafe({ id: id, date: date }) + ";\nconst FILE_DATA = JSON.parse(JSON.stringify(DATA));\n");
+    let nm = decodeURIComponent(url.split("/").pop() || "");
+    if (!/\.html?$/i.test(nm)) nm = "index.html";
+    const mm = nm.match(/^(.*?)(_mode(?: (\d+))?)?(\.html?)$/i);
+    const tail = !mm[2] ? "_mode" : (mm[3] ? "_mode " + (parseInt(mm[3], 10) + 1) : "_mode 2");
+    const blob = new Blob([src], { type: "text/html;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = mm[1] + tail + mm[4];
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    state.createdBuild = id;
+    saveState();
+    refreshChangeUI();
+  } catch(e){
+    showToast("Не удалось создать файл.");
+  }
+}
+function openArchive(){
+  const items = pendingArchive().concat(ARCHIVE.slice().reverse());
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;";
+  const box = document.createElement("div");
+  box.style.cssText = "background:#161616;border:1px solid #2e2e2e;border-radius:12px;padding:16px;max-width:760px;width:100%;max-height:80vh;display:flex;flex-direction:column;color:#ececec;";
+  const head = document.createElement("div");
+  head.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:16px;font-weight:600;";
+  head.textContent = "Архив";
+  const close = () => ov.remove();
+  head.appendChild(bannerBtn("Закрыть", false, close));
+  box.appendChild(head);
+  const list = document.createElement("div");
+  list.style.cssText = "overflow:auto;";
+  if (!items.length){
+    const e = document.createElement("div");
+    e.style.cssText = "font-size:13px;color:#ccc;";
+    e.textContent = "Архив пуст";
+    list.appendChild(e);
+  }
+  items.forEach(it => {
+    const row = document.createElement("div");
+    row.style.cssText = "padding:8px 0;border-top:1px solid #2e2e2e;font-size:12px;font-family:ui-monospace,Menlo,monospace;color:#ccc;word-break:break-word;";
+    const nm = document.createElement("span");
+    nm.style.cssText = "font-weight:600;color:#ececec;";
+    nm.textContent = it.name;
+    row.appendChild(nm);
+    row.appendChild(document.createTextNode(" — " + (it.params || "без строки параметров")));
+    const meta = document.createElement("div");
+    meta.style.cssText = "font-size:11px;color:#8a8a8a;margin-top:2px;";
+    meta.textContent = (it.kind === "bg" ? "Плашка" : "Текст") + " · файл от " + (it.date || "—");
+    row.appendChild(meta);
+    list.appendChild(row);
+  });
+  box.appendChild(list);
+  ov.appendChild(box);
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  document.body.appendChild(ov);
 }
 
 let toastTimer = null;
@@ -2056,7 +2233,7 @@ function clearAllSelections(){
   syncFamChecks();
 }
 (function(){
-  const KEEP_IDS = ["selectAllFamsBtn", "selectAll_fg_Btn", "selectAll_bg_Btn", "exportFamsBtn"];
+  const KEEP_IDS = ["selectAll_fg_Btn", "selectAll_bg_Btn", "exportFamsBtn"];
   function onAnyAction(e){
     const t = e.target;
     if (!t || !t.closest) return;
