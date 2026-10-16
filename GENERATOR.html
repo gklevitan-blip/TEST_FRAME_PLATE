@@ -101,6 +101,13 @@
   .strip{cursor:pointer; display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line);}
   .strip > div{flex:1; min-width:0; height:64px;}
 
+  .strip > div{position:relative; display:flex; align-items:center; justify-content:center;}
+  .ret-icon{
+    width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,.55); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:16px; line-height:1; cursor:pointer;
+  }
+  input:disabled{opacity:.55;}
+
   .modal-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,.6);
     display:flex; align-items:center; justify-content:center; z-index:10000; padding:16px;
@@ -152,10 +159,15 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="primary" onclick="buildTable()">Построить ряд</button>
+        <button class="primary" onclick="buildTable()">Построить</button>
         <button id="addBtn" onclick="addSet()" disabled>Добавить</button>
-        <button onclick="downloadCurrent()">Создать txt файл</button>
-        <button onclick="showResults()">Показать результаты</button>
+        <button id="showBtn" onclick="showResults()">Показать</button>
+      </div>
+      <div class="btn-row hidden" id="returnRow">
+        <button id="retResetBtn" onclick="resetReturn()" style="color:#e5484d; border-color:#e5484d; width:38px; padding:9px 0; font-size:15px; line-height:1;">✕</button>
+        <button id="retOpenBtn" onclick="openReturn()" style="background:#e5484d; border-color:#e5484d; color:#fff;">Открыть</button>
+        <button id="retCancelBtn" class="hidden" onclick="cancelReturn()">Отменить</button>
+        <button id="retSaveBtn" class="hidden" onclick="saveReturn()" style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;">Сохранить</button>
       </div>
     </div>
 
@@ -274,7 +286,7 @@
 <div class="screen hidden" id="resultScreen">
   <div class="topbar">
     <div class="left-actions">
-      <button onclick="showSelect()" title="Вернуться к выбору" style="font-size:18px; line-height:1; padding:9px 16px;">↩</button>
+      <button onclick="showSelect()" title="Вернуться к выбору" style="padding:9px 16px; display:flex; align-items:center;"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
       <span id="modeLabel" style="align-self:center; color:var(--dim); font-size:13px; font-weight:600;">Fonts</span>
     </div>
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
@@ -334,6 +346,7 @@ let lastMaxVal = null;
 let lastSat = 1.0;
 let lastStep = null;
 let lastStepOriginal = null;
+let returned = null; // {id, pre, open, dirty, locked} — семейство, возвращённое со второго экрана на первый
 
 let toastTimer = null;
 function showToast(msg){
@@ -485,6 +498,7 @@ function buildTable(){
   const rows = buildRows(hue, start, step, count, maxVal, sat);
 
   if(lastRowsOriginal && computeSignature(hue, maxVal, rows, sat) === computeSignature(lastHue, lastMaxVal, lastRowsOriginal, lastSat)){
+    if(returned) returned.dirty = false;
     showToast('Уже создано.');
     return;
   }
@@ -501,7 +515,8 @@ function buildTable(){
 
   renderTable(hue, maxVal, rows, sat, step);
 
-  document.getElementById('refCheckRow').classList.remove('hidden');
+  if(returned) returned.dirty = false;
+  if(!returned) document.getElementById('refCheckRow').classList.remove('hidden');
   const applyChk = document.getElementById('applyRefChk');
   applyChk.checked = false;
   applyChk.disabled = !reference;
@@ -618,14 +633,14 @@ function onRefFontChange(final){
 
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  const showCR = (mode === 'fonts' && document.getElementById('plateChk').checked) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
+  const showCR = !returned && (mode === 'fonts' && document.getElementById('plateChk').checked) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
   html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
   rows.forEach(r => {
     html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
-  document.getElementById('addBtn').disabled = false;
+  document.getElementById('addBtn').disabled = !!returned;
 }
 
 function summaryLine(hue, maxVal, rows, sat, step, edited){
@@ -997,6 +1012,7 @@ function closeSaveChoice(){
   document.getElementById('saveChoiceModal').classList.add('hidden');
 }
 function commitEdit(mode){
+  if(returned){ commitReturn(mode); return; }
   if(!editSession) { closeSaveChoice(); return; }
   const s = sets.find(x => x.id === editSession.id);
   if(!s){ closeSaveChoice(); return; }
@@ -1099,8 +1115,22 @@ function clearAll(){
 
 let expandedSets = new Set();
 
+function contrastHex(a, b){
+  const x = relLum(a), y = relLum(b);
+  return (Math.max(x,y)+0.05) / (Math.min(x,y)+0.05);
+}
 function detailTable(rows){
-  const lines = rows.map(r => `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}` + (mode === 'fonts' ? `  CR ${contrastOnPlateN(r.hex, REF_PLATE).toFixed(1)}` : '')).join('\n');
+  let fs = null, fIdx = 1;
+  if(mode === 'plates'){
+    fs = findRefFontSet();
+    if(fs) fIdx = Math.min(fontDefault(), fs.rows.length);
+  }
+  const lines = rows.map(r => {
+    let t = `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}`;
+    if(mode === 'fonts') t += `  CR ${contrastOnPlateN(r.hex, REF_PLATE).toFixed(1)}`;
+    else if(fs) t += `  CR ${contrastHex(r.hex, fs.rows[fIdx-1].hex).toFixed(1)}`;
+    return t;
+  }).join('\n');
   return `<div style="margin-top:8px; font-family:monospace; font-size:13px; line-height:1.5; white-space:pre;">${lines}</div>`;
 }
 
@@ -1119,8 +1149,9 @@ function renderSets(){
   container.innerHTML = sets.map((s) => {
     const tag = (s.refMode === 'safe' ? ' (изменен по референсу)' : '') + (s.editTag ? ' — ' + s.editTag : '');
     const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
-    const strip = s.rows.map(r => `<div style="background:#${r.hex}"></div>`).join('');
-    const detail = expandedSets.has(s.id) ? detailTable(s.rows) : '';
+    const isOpen = expandedSets.has(s.id);
+    const strip = s.rows.map((r, i) => `<div style="background:#${r.hex}">${(isOpen && i === 0 && !returned) ? `<span class="ret-icon" onclick="event.stopPropagation(); returnToFirst(${s.id})">↩</span>` : ''}</div>`).join('');
+    const detail = isOpen ? detailTable(s.rows) : '';
     return `
       <div class="set-block">
         <div class="set-header">
@@ -1154,6 +1185,7 @@ function clearEditBoxes(){
 function showResults(){
   document.getElementById('selectScreen').classList.add('hidden');
   document.getElementById('resultScreen').classList.remove('hidden');
+  renderSets();
   clearEditBoxes();
 }
 function showSelect(){
@@ -1176,6 +1208,184 @@ function showSelect(){
   document.getElementById('refCheckRow').classList.add('hidden');
   document.getElementById('applyRefChk').checked = false;
 }
+
+/* ---------- Возврат семейства со второго экрана на первый ---------- */
+function captureFirstScreen(){
+  const g = id => document.getElementById(id);
+  const vals = {};
+  ['genHue','genStart','genStep','genCount','genStartC','genEndC','genMax','genSat','plateIdx','fontIdx'].forEach(id => vals[id] = g(id).value);
+  return {
+    vals,
+    plateChk: g('plateChk').checked, fontChk: g('fontChk').checked,
+    applyRefChk: g('applyRefChk').checked, applyRefDis: g('applyRefChk').disabled,
+    rowHidden: g('refCheckRow').classList.contains('hidden'),
+    genOut: g('genOut').innerHTML, addDis: g('addBtn').disabled,
+    lastRows, lastRowsOriginal, lastRefMode, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx,
+    autoFill: JSON.parse(JSON.stringify(autoFill))
+  };
+}
+function restoreFirstScreen(pre){
+  const g = id => document.getElementById(id);
+  Object.keys(pre.vals).forEach(id => { g(id).value = pre.vals[id]; });
+  g('plateChk').checked = pre.plateChk; g('fontChk').checked = pre.fontChk;
+  g('applyRefChk').checked = pre.applyRefChk; g('applyRefChk').disabled = pre.applyRefDis;
+  g('refCheckRow').classList.toggle('hidden', pre.rowHidden);
+  g('genOut').innerHTML = pre.genOut; g('addBtn').disabled = pre.addDis;
+  lastRows = pre.lastRows; lastRowsOriginal = pre.lastRowsOriginal; lastRefMode = pre.lastRefMode;
+  lastHue = pre.lastHue; lastMaxVal = pre.lastMaxVal; lastSat = pre.lastSat;
+  lastStep = pre.lastStep; lastStepOriginal = pre.lastStepOriginal;
+  lastFontIdx = pre.lastFontIdx; lastPlateIdx = pre.lastPlateIdx;
+  Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  Object.assign(autoFill, pre.autoFill);
+}
+function populateFromSet(s){
+  const g = id => document.getElementById(id);
+  Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  g('genHue').value = s.hue;
+  g('genStart').value = s.rows[0].L;
+  g('genStep').value = s.step;
+  g('genCount').value = s.rows.length;
+  g('genStartC').value = '';
+  g('genEndC').value = '';
+  g('genMax').value = s.maxVal;
+  g('genSat').value = Math.round(s.sat * 10000) / 100;
+  lastRows = s.rows.map(r => ({...r}));
+  lastRowsOriginal = s.rows.map(r => ({...r}));
+  lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
+  lastStep = s.step; lastStepOriginal = s.step; lastRefMode = null;
+  renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
+  g('refCheckRow').classList.add('hidden');
+  g('addBtn').disabled = true;
+}
+let lockPrev = new Set();
+function lockFirstScreen(flag){
+  const els = document.querySelectorAll('#selectScreen input, #selectScreen button');
+  if(flag){
+    lockPrev = new Set();
+    els.forEach(el => {
+      if(el.closest('#returnRow')) return;
+      if(el.disabled) lockPrev.add(el);
+      el.disabled = true;
+    });
+  } else {
+    els.forEach(el => {
+      if(el.closest('#returnRow')) return;
+      if(!lockPrev.has(el)) el.disabled = false;
+    });
+    lockPrev = new Set();
+  }
+  if(returned) returned.locked = flag;
+}
+function blockWhileReturned(){
+  ['addBtn','showBtn','modeFonts','modePlates'].forEach(id => { document.getElementById(id).disabled = true; });
+  document.querySelectorAll('#massBlock button, #massBlock input').forEach(el => { el.disabled = true; });
+}
+function setReturnRowState(open){
+  document.getElementById('retOpenBtn').classList.toggle('hidden', open);
+  document.getElementById('retCancelBtn').classList.toggle('hidden', !open);
+  document.getElementById('retSaveBtn').classList.toggle('hidden', !open);
+}
+
+function returnToFirst(id){
+  if(returned) return;
+  if(sets.some(x => x.selected)){
+    showToast('Сначала снимите галку с отмеченной полосы.');
+    return;
+  }
+  const s = sets.find(x => x.id === id);
+  if(!s) return;
+  returned = {id, pre: captureFirstScreen(), open: false, dirty: false, locked: false};
+  document.getElementById('resultScreen').classList.add('hidden');
+  document.getElementById('selectScreen').classList.remove('hidden');
+  populateFromSet(s);
+  lockFirstScreen(true);
+  setReturnRowState(false);
+  document.getElementById('returnRow').classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
+function openReturn(){
+  if(!returned || returned.open) return;
+  returned.open = true;
+  returned.dirty = false;
+  lockFirstScreen(false);
+  blockWhileReturned();
+  setReturnRowState(true);
+}
+
+function cancelReturn(){
+  if(!returned) return;
+  const s = sets.find(x => x.id === returned.id);
+  if(returned.locked) lockFirstScreen(false);
+  returned.open = false;
+  returned.dirty = false;
+  if(s) populateFromSet(s);
+  lockFirstScreen(true);
+  setReturnRowState(false);
+}
+
+function resetReturn(){
+  exitReturn();
+}
+
+function exitReturn(){
+  if(!returned) return;
+  const pre = returned.pre;
+  if(returned.locked) lockFirstScreen(false);
+  returned = null;
+  ['showBtn','modeFonts','modePlates'].forEach(id => { document.getElementById(id).disabled = false; });
+  document.querySelectorAll('#massBlock button, #massBlock input').forEach(el => { el.disabled = false; });
+  restoreFirstScreen(pre);
+  setReturnRowState(false);
+  document.getElementById('returnRow').classList.add('hidden');
+  renderRefBlock();
+}
+
+function saveReturn(){
+  if(!returned || !returned.open) return;
+  if(returned.dirty){ showToast('Сначала нажмите «Построить».'); return; }
+  const s = sets.find(x => x.id === returned.id);
+  if(!s || !lastRows) return;
+  if(lastHue === s.hue && lastMaxVal === s.maxVal && lastSat === s.sat && rowsEqual(lastRows, s.rows)){
+    showToast('Изменений нет.');
+    return;
+  }
+  document.getElementById('saveChoiceModal').classList.remove('hidden');
+}
+
+function commitReturn(m){
+  const s = returned && sets.find(x => x.id === returned.id);
+  if(!s){ closeSaveChoice(); return; }
+  const rows = lastRows.map(r => ({...r}));
+  const sig = computeSignature(lastHue, lastMaxVal, rows, lastSat) + (lastRefMode ? '|' + lastRefMode : '');
+  if(sets.some(x => x !== s && x.sig === sig) || (m === 'new' && s.sig === sig)){
+    closeSaveChoice();
+    showToast('Такой ряд уже есть.');
+    return;
+  }
+  const flagStart = rows[0].L !== s.rows[0].L;
+  const flagEnd = rows[rows.length-1].L !== s.rows[s.rows.length-1].L;
+  const name = lastHue !== s.hue ? getNameForHue(lastHue) : s.name;
+  const base = {
+    hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows, selected: false,
+    sig, refMode: lastRefMode, name, editedStartC: flagStart, editedEndC: flagEnd
+  };
+  if(m === 'replace'){
+    sets = sets.filter(x => x !== s);
+    insertSetSorted({...base, id: s.id, editTag: 'Изменен'});
+  } else {
+    insertSetSorted({...base, id: nextId++, editTag: 'Добавлен здесь'});
+  }
+  closeSaveChoice();
+  saveSets();
+  renderSets();
+  exitReturn();
+  showToast(m === 'replace' ? 'Заменено.' : 'Добавлено как новый.');
+}
+
+document.getElementById('selectScreen').addEventListener('input', e => {
+  if(returned && returned.open && !e.target.closest('#returnRow')) returned.dirty = true;
+});
 
 /* ---------- Lab / C* (для «системного соответствия», см. переписку) ---------- */
 const LAB_Xn=0.95047, LAB_Yn=1.0, LAB_Zn=1.08883;
