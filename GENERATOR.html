@@ -161,13 +161,15 @@
       <div class="btn-row">
         <button class="primary" onclick="buildTable()">Построить</button>
         <button id="addBtn" onclick="addSet()" disabled>Добавить</button>
-        <button id="showBtn" onclick="showResults()">Показать</button>
+        <button id="showBtn" onclick="showResults()" style="margin-left:auto;">Показать</button>
       </div>
       <div class="btn-row hidden" id="returnRow">
         <button id="retResetBtn" onclick="resetReturn()" style="color:#e5484d; border-color:#e5484d; width:38px; padding:9px 0; font-size:15px; line-height:1;">✕</button>
-        <button id="retOpenBtn" onclick="openReturn()" style="background:#e5484d; border-color:#e5484d; color:#fff;">Открыть</button>
-        <button id="retCancelBtn" class="hidden" onclick="cancelReturn()">Отменить</button>
-        <button id="retSaveBtn" class="hidden" onclick="saveReturn()" style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;">Сохранить</button>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <button id="retOpenBtn" onclick="openReturn()" style="background:#e5484d; border-color:#e5484d; color:#fff;">Открыть</button>
+          <button id="retCancelBtn" class="hidden" onclick="cancelReturn()">Отменить</button>
+          <button id="retSaveBtn" class="hidden" onclick="saveReturn()" style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;">Сохранить</button>
+        </div>
       </div>
     </div>
 
@@ -400,6 +402,13 @@ function pctOf(r,g,b,maxVal){
 }
 
 function currentInputs(){
+  let startC = parseFloat(document.getElementById('genStartC').value);
+  let endC = parseFloat(document.getElementById('genEndC').value);
+  if(returned && returned.exact){
+    // поле не тронуто — берём точное C* из семейства, а не округлённое с экрана
+    if(document.getElementById('genStartC').value === returned.exact.startTxt) startC = returned.exact.start;
+    if(document.getElementById('genEndC').value === returned.exact.endTxt) endC = returned.exact.end;
+  }
   return {
     hue: parseFloat(document.getElementById('genHue').value),
     start: parseFloat(document.getElementById('genStart').value),
@@ -407,8 +416,8 @@ function currentInputs(){
     count: parseInt(document.getElementById('genCount').value),
     maxVal: parseFloat(document.getElementById('genMax').value) || 255,
     sat: (parseFloat(document.getElementById('genSat').value) || 0) / 100,
-    startC: parseFloat(document.getElementById('genStartC').value),
-    endC: parseFloat(document.getElementById('genEndC').value)
+    startC: startC,
+    endC: endC
   };
 }
 
@@ -516,7 +525,7 @@ function buildTable(){
   renderTable(hue, maxVal, rows, sat, step);
 
   if(returned) returned.dirty = false;
-  if(!returned) document.getElementById('refCheckRow').classList.remove('hidden');
+  document.getElementById('refCheckRow').classList.remove('hidden');
   const applyChk = document.getElementById('applyRefChk');
   applyChk.checked = false;
   applyChk.disabled = !reference;
@@ -633,7 +642,7 @@ function onRefFontChange(final){
 
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  const showCR = !returned && (mode === 'fonts' && document.getElementById('plateChk').checked) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
+  const showCR = (mode === 'fonts' && document.getElementById('plateChk').checked) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
   html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
   rows.forEach(r => {
     html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
@@ -1238,6 +1247,18 @@ function restoreFirstScreen(pre){
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
   Object.assign(autoFill, pre.autoFill);
 }
+function captureContrastUI(){
+  const g = id => document.getElementById(id);
+  return {plateChk: g('plateChk').checked, plateIdx: g('plateIdx').value, fontChk: g('fontChk').checked, fontIdx: g('fontIdx').value, lastPlateIdx, lastFontIdx};
+}
+function applyContrastUI(b){
+  const g = id => document.getElementById(id);
+  g('plateChk').checked = b.plateChk; g('plateIdx').value = b.plateIdx;
+  g('fontChk').checked = b.fontChk; g('fontIdx').value = b.fontIdx;
+  lastPlateIdx = b.lastPlateIdx; lastFontIdx = b.lastFontIdx;
+  renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
+  g('addBtn').disabled = true;
+}
 function populateFromSet(s){
   const g = id => document.getElementById(id);
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
@@ -1245,16 +1266,20 @@ function populateFromSet(s){
   g('genStart').value = s.rows[0].L;
   g('genStep').value = s.step;
   g('genCount').value = s.rows.length;
-  g('genStartC').value = '';
-  g('genEndC').value = '';
+  g('genStartC').value = s.rows[0].C.toFixed(1);
+  g('genEndC').value = s.rows[s.rows.length-1].C.toFixed(1);
+  if(returned) returned.exact = {start: s.rows[0].C, end: s.rows[s.rows.length-1].C, startTxt: g('genStartC').value, endTxt: g('genEndC').value};
   g('genMax').value = s.maxVal;
   g('genSat').value = Math.round(s.sat * 10000) / 100;
   lastRows = s.rows.map(r => ({...r}));
   lastRowsOriginal = s.rows.map(r => ({...r}));
   lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
-  lastStep = s.step; lastStepOriginal = s.step; lastRefMode = null;
+  lastStep = s.step; lastStepOriginal = s.step; lastRefMode = s.refMode || null;
+  resetFontIdxToDefault();
+  g('refCheckRow').classList.remove('hidden');
+  g('applyRefChk').checked = lastRefMode === 'safe';
+  g('applyRefChk').disabled = !reference;
   renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
-  g('refCheckRow').classList.add('hidden');
   g('addBtn').disabled = true;
 }
 let lockPrev = new Set();
@@ -1298,6 +1323,7 @@ function returnToFirst(id){
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('selectScreen').classList.remove('hidden');
   populateFromSet(s);
+  returned.base = captureContrastUI();
   lockFirstScreen(true);
   setReturnRowState(false);
   document.getElementById('returnRow').classList.remove('hidden');
@@ -1319,7 +1345,10 @@ function cancelReturn(){
   if(returned.locked) lockFirstScreen(false);
   returned.open = false;
   returned.dirty = false;
-  if(s) populateFromSet(s);
+  if(s){
+    populateFromSet(s);
+    applyContrastUI(returned.base);
+  }
   lockFirstScreen(true);
   setReturnRowState(false);
 }
@@ -1384,7 +1413,11 @@ function commitReturn(m){
 }
 
 document.getElementById('selectScreen').addEventListener('input', e => {
-  if(returned && returned.open && !e.target.closest('#returnRow')) returned.dirty = true;
+  if(returned && returned.open){
+    if(e.target.id === 'genStart') document.getElementById('genStartC').value = '';
+    if(e.target.id === 'genStep') document.getElementById('genEndC').value = '';
+  }
+  if(returned && returned.open && ['genHue','genStart','genStep','genCount','genStartC','genEndC','genMax','genSat'].includes(e.target.id)) returned.dirty = true;
 });
 
 /* ---------- Lab / C* (для «системного соответствия», см. переписку) ---------- */
