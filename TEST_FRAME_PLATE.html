@@ -498,7 +498,7 @@
     opacity: 0; transition: opacity .2s ease, transform .2s ease; pointer-events: none; z-index: 9999;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  #fgSwatches .mini, #bgSwatches .mini { border: 1px solid #8a8a8a; background-clip: padding-box; }
+  #fgSwatches .mini, #bgSwatches .mini, #fgFsSwatches .mini, #bgFsSwatches .mini { border: 1px solid #8a8a8a; background-clip: padding-box; }
   .chg-banner { background: #c62828; color: #fff; font-size: 11px; line-height: 1.3; padding: 6px 8px; border-radius: 6px; margin-bottom: 12px; display: none; }
   .fam-mark { margin-left: 10px; font-size: 13px; font-weight: 600; color: #ff8a8a; }
 </style>
@@ -927,6 +927,11 @@ function populateFsSelect(sel, obj, onFamily, onCustom){
     opt.textContent = name;
     sel.appendChild(opt);
   });
+  const sepOpt = document.createElement("option");
+  sepOpt.value = "";
+  sepOpt.disabled = true;
+  sepOpt.textContent = "────────────";
+  sel.appendChild(sepOpt);
   const customOpt = document.createElement("option");
   customOpt.value = "__custom__";
   customOpt.textContent = "RGB";
@@ -1050,16 +1055,33 @@ function syncFgUI(){
   document.getElementById("fgCustomColorFS").value = currentFgHex();
 }
 
-function bgLabel(){
+function hexHls(hex){
+  const {r,g,b} = hexToRgb(hex);
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b), d = mx - mn;
+  let h = 0, s = 0;
+  if (d > 0) {
+    if (mx === r) h = 60 * (((g - b) / d) % 6);
+    else if (mx === g) h = 60 * ((b - r) / d + 2);
+    else h = 60 * ((r - g) / d + 4);
+    if (h < 0) h += 360;
+    s = d / (255 - Math.abs(mx + mn - 255));
+  }
+  return { hue: Math.round(h) % 360, sat: Math.round(s * 100), L: Math.round((mx + mn) / 2) };
+}
+function hlsInfo(hex){
+  const c = hexHls(hex);
+  return "hue " + c.hue + "°, S " + c.sat + ", L=" + c.L;
+}
+function bgLabel(full){
   const f = activeFrame();
-  if (f.bgCustomHex) return "RGB_" + currentBgHex().replace("#","").toUpperCase();
+  if (f.bgCustomHex) return "RGB_" + currentBgHex().replace("#","").toUpperCase() + (full ? " [" + hlsInfo(currentBgHex()) + "]" : " [" + hexHls(currentBgHex()).hue + "°]");
   const list = DATA.bg[f.bgFamily].list;
   const idx = clampIndex(f.bgIndex, list.length);
   return f.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
 }
-function fgLabel(){
+function fgLabel(full){
   const f = activeFrame();
-  if (f.fgCustomHex) return "RGB_" + currentFgHex().replace("#","").toUpperCase();
+  if (f.fgCustomHex) return "RGB_" + currentFgHex().replace("#","").toUpperCase() + (full ? " [" + hlsInfo(currentFgHex()) + "]" : " [" + hexHls(currentFgHex()).hue + "°]");
   const list = DATA.text[f.fgFamily].list;
   const idx = clampIndex(f.fgIndex, list.length);
   return f.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
@@ -1285,8 +1307,8 @@ function fallbackCopy(text){
 }
 function comboString(){
   const f = activeFrame();
-  const fgLine = fgLabel();
-  const bgLine = bgLabel();
+  const fgLine = fgLabel(true);
+  const bgLine = bgLabel(true);
   let out = f.plashkaEnabled
     ? ("Шрифт: " + fgLine + "\nПлашка: " + bgLine)
     : ("Шрифт: " + fgLine);
@@ -1392,7 +1414,7 @@ function normalizeSavedCombo(c){
 function hexWithFamily(entry){
   const hex = entry.hex.replace("#","").toUpperCase();
   if (entry.family) return hex + "(" + entry.family + ", " + entry.index + ")";
-  return hex + "(RGB)";
+  return hex + "(RGB) [" + hlsInfo(hex) + "]";
 }
 
 function formatCombosTxt(){
@@ -1482,11 +1504,15 @@ document.getElementById("clearListBtn").addEventListener("click", () => {
 });
 
 function rgbEntries(){
-  if (state.savedCombos.length !== 1) return [];
-  const c = state.savedCombos[0];
-  const out = [];
-  if (c.font && !c.font.family) out.push({ kind: "text", hex: c.font.hex.replace("#","").toUpperCase() });
-  if (c.plate && !c.plate.family) out.push({ kind: "bg", hex: c.plate.hex.replace("#","").toUpperCase() });
+  const out = [], seen = new Set();
+  const add = (kind, e) => {
+    if (!e || e.family) return;
+    const hex = e.hex.replace("#","").toUpperCase();
+    if (seen.has(kind + hex)) return;
+    seen.add(kind + hex);
+    out.push({ kind: kind, hex: hex });
+  };
+  state.savedCombos.forEach(c => { add("text", c.font); add("bg", c.plate); });
   return out;
 }
 function updateExportBtn(){

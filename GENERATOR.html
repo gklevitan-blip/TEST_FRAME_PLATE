@@ -188,6 +188,16 @@
       <div id="refFontOut"></div>
     </div>
 
+    <div id="refPlateBlock" class="panel hidden">
+      <h2>Референсный Plate</h2>
+      <div class="row" style="align-items:flex-end; flex-wrap:nowrap;">
+        <div><label>Hue (°)</label><input type="number" id="refPlateHue" min="0" max="360" oninput="onRefPlateChange()" onchange="onRefPlateChange(true)"></div>
+        <div style="flex:0 0 80px; min-width:70px;"><label>Дефолт</label><input type="number" id="refPlateDef" value="3" min="1" step="1" oninput="onRefPlateDefChange()" onchange="onRefPlateDefChange()"></div>
+        <div style="flex:0 0 auto; min-width:0;"><button type="button" class="primary" onclick="clearRefPlate()">Очистить</button></div>
+      </div>
+      <div id="refPlateOut"></div>
+    </div>
+
     <div id="massBlock" class="panel hidden">
       <div class="btn-row" style="margin-top:0;">
         <button class="primary" onclick="createForAllHues()">Создать для всех hue</button>
@@ -208,8 +218,8 @@
         <button type="button" class="primary imp-btn" onclick="importHex()">Импорт</button>
       </div>
       <div id="importList"></div>
-      <div class="btn-row">
-        <button type="button" onclick="applyImport()">Применить</button>
+      <div class="btn-row" style="justify-content:space-between;">
+        <button type="button" id="importApplyBtn" onclick="applyOrCancelImport()">Применить</button>
         <button type="button" onclick="askDeleteImport()">Удалить</button>
       </div>
     </div>
@@ -224,7 +234,7 @@
           <input type="checkbox" id="plateChk" onchange="onPlateChange()">
           Контраст plate
         </label>
-        <input type="number" id="plateIdx" value="4" min="1" max="7" step="1" style="width:56px;" oninput="onPlateChange()" onchange="normalizePlateIdx()">
+        <input type="number" id="plateIdx" value="3" min="1" step="1" style="width:56px;" oninput="onPlateChange()" onchange="normalizePlateIdx()">
       </div>
       <div id="fontBox" class="hidden" style="display:flex; align-items:center; gap:8px;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
@@ -527,6 +537,7 @@ function buildTable(){
   lastRowsOriginal = rows;
   lastRows = rows;
   resetFontIdxToDefault();
+  resetPlateIdxToDefault();
   lastHue = hue;
   lastMaxVal = maxVal;
   lastSat = sat;
@@ -540,32 +551,48 @@ function buildTable(){
 }
 
 /* ---------- Серые плашки (1 — самая тёмная, 7 — самая светлая) и контраст ---------- */
-const PLATES = [
-  {n:1, hex:'101010', L:16},
-  {n:2, hex:'151515', L:21},
-  {n:3, hex:'1A1A1A', L:26},
-  {n:4, hex:'1F1F1F', L:31},
-  {n:5, hex:'242424', L:36},
-  {n:6, hex:'292929', L:41},
-  {n:7, hex:'2E2E2E', L:46}
-];
-let lastPlateIdx = 4;
+const PLATE_SETS_KEY = 'generator_obojm_plates_v1';
+const REF_PLATE_KEY = 'generator_obojm_ref_plate_hue_v1';
+const REF_PLATE_DEF_KEY = 'generator_obojm_ref_plate_def_v1';
+let lastPlateIdx = 3;
+function findRefPlateSet(){
+  const inp = document.getElementById('refPlateHue');
+  if(!inp || inp.value === '') return null;
+  const h = parseFloat(inp.value);
+  if(isNaN(h)) return null;
+  try{
+    const raw = localStorage.getItem(PLATE_SETS_KEY);
+    if(!raw) return null;
+    const data = JSON.parse(raw);
+    if(!data || !Array.isArray(data.sets)) return null;
+    const cand = data.sets.filter(s => Number(s.hue) === h && Array.isArray(s.rows) && s.rows.length);
+    if(!cand.length) return null;
+    return cand.reduce((a, b) => (b.id > a.id ? b : a));
+  }catch(e){ return null; }
+}
 function plateIndex(){
+  const fs = findRefPlateSet();
+  const max = fs ? fs.rows.length : 1;
   const v = parseInt(document.getElementById('plateIdx').value);
-  if(!isNaN(v)) lastPlateIdx = Math.max(1, Math.min(7, v));
-  return lastPlateIdx;
+  if(!isNaN(v)) lastPlateIdx = Math.max(1, v);
+  return Math.min(lastPlateIdx, max);
+}
+function plateDefault(){
+  const v = parseInt(document.getElementById('refPlateDef').value);
+  return isNaN(v) ? 3 : Math.max(1, v);
+}
+function resetPlateIdxToDefault(){
+  lastPlateIdx = plateDefault();
+  document.getElementById('plateIdx').value = lastPlateIdx;
 }
 function relLum(hex){
   const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
   return 0.2126*srgbToLinear(r) + 0.7152*srgbToLinear(g) + 0.0722*srgbToLinear(b);
 }
 function contrastOnPlate(hex){
-  const a = relLum(hex), b = relLum(PLATES[plateIndex()-1].hex);
-  return (Math.max(a,b)+0.05) / (Math.min(a,b)+0.05);
-}
-const REF_PLATE = 4;
-function contrastOnPlateN(hex, n){
-  const a = relLum(hex), b = relLum(PLATES[n-1].hex);
+  const fs = findRefPlateSet();
+  if(!fs) return 0;
+  const a = relLum(hex), b = relLum(fs.rows[plateIndex()-1].hex);
   return (Math.max(a,b)+0.05) / (Math.min(a,b)+0.05);
 }
 function onPlateChange(){
@@ -574,6 +601,30 @@ function onPlateChange(){
 }
 function normalizePlateIdx(){
   document.getElementById('plateIdx').value = plateIndex();
+  onPlateChange();
+}
+function onRefPlateDefChange(){
+  try{ localStorage.setItem(REF_PLATE_DEF_KEY, document.getElementById('refPlateDef').value); }catch(e){}
+  resetPlateIdxToDefault();
+  onPlateChange();
+}
+function clearRefPlate(){
+  document.getElementById('refPlateHue').value = '';
+  onRefPlateChange();
+}
+function onRefPlateChange(final){
+  const inp = document.getElementById('refPlateHue');
+  resetPlateIdxToDefault();
+  try{ localStorage.setItem(REF_PLATE_KEY, inp.value); }catch(e){}
+  const fs = findRefPlateSet();
+  const out = document.getElementById('refPlateOut');
+  if(fs){
+    const nm = String(fs.name || ('PLATE_' + fs.hue)).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    out.innerHTML = `<div class="hint"><b>${nm}</b> — ${summaryLine(fs.hue, fs.maxVal, fs.rows, fs.sat, fs.step)}</div>`;
+  }else{
+    out.innerHTML = '';
+    if(final === true && inp.value !== '') showToast('Нет семейства plates с таким hue.');
+  }
   onPlateChange();
 }
 
@@ -650,7 +701,7 @@ function onRefFontChange(final){
 
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  const showCR = (mode === 'fonts' && document.getElementById('plateChk').checked) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
+  const showCR = (mode === 'fonts' && document.getElementById('plateChk').checked && !!findRefPlateSet()) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
   html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
   rows.forEach(r => {
     html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
@@ -1095,11 +1146,13 @@ function detailTable(rows){
   if(mode === 'plates'){
     fs = findRefFontSet();
     if(fs) fIdx = Math.min(fontDefault(), fs.rows.length);
+  }else{
+    fs = findRefPlateSet();
+    if(fs) fIdx = Math.min(plateDefault(), fs.rows.length);
   }
   const lines = rows.map(r => {
     let t = `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}`;
-    if(mode === 'fonts') t += `  CR ${contrastOnPlateN(r.hex, REF_PLATE).toFixed(1)}`;
-    else if(fs) t += `  CR ${contrastHex(r.hex, fs.rows[fIdx-1].hex).toFixed(1)}`;
+    if(fs) t += `  CR ${contrastHex(r.hex, fs.rows[fIdx-1].hex).toFixed(1)}`;
     return t;
   }).join('\n');
   return `<div style="margin-top:8px; font-family:monospace; font-size:13px; line-height:1.5; white-space:pre;">${lines}</div>`;
@@ -1234,6 +1287,7 @@ function populateFromSet(s){
   lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
   lastStep = s.step; lastStepOriginal = s.step;
   resetFontIdxToDefault();
+  resetPlateIdxToDefault();
   g('refCheckRow').classList.remove('hidden');
   renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
   g('addBtn').disabled = true;
@@ -1478,18 +1532,31 @@ function processImportText(text){
   try{ p = JSON.parse(text); }catch(e){ p = null; }
   if(!p || p.type !== 'obojm_hex_import' || !Array.isArray(p.items)){ showToast('В буфере нет цвета из TEST.'); return; }
   const kind = mode === 'plates' ? 'bg' : 'text';
-  const it = p.items.find(v => v && v.kind === kind && /^[0-9A-Fa-f]{6}$/.test(String(v.hex)));
-  if(!it){ showToast(mode === 'plates' ? 'В буфере нет цвета для Plates.' : 'В буфере нет цвета для Fonts.'); return; }
-  const hex = String(it.hex).toUpperCase();
-  const c = hexToHls(hex);
-  if(!validStartL(c.L)){ showToast(`Нет импорта: L=${c.L} вне диапазона ` + (mode === 'plates' ? 'Plates (0–99).' : 'Fonts (100–255).')); return; }
-  if(importItems.some(x => x.hex === hex)){ showToast('Уже есть.'); return; }
-  importItems.push({id: importNextId++, hex, hue: c.hue, sat: c.sat, L: c.L, selected: false});
-  saveImports();
-  renderImports();
-  showToast('Импортировано.');
+  const list = p.items.filter(v => v && v.kind === kind && /^[0-9A-Fa-f]{6}$/.test(String(v.hex)));
+  if(!list.length){ showToast(mode === 'plates' ? 'В буфере нет цветов для Plates.' : 'В буфере нет цветов для Fonts.'); return; }
+  let added = 0, dup = 0, range = 0;
+  list.forEach(it => {
+    const hex = String(it.hex).toUpperCase();
+    const c = hexToHls(hex);
+    if(!validStartL(c.L)){ range++; return; }
+    if(importItems.some(x => x.hex === hex)){ dup++; return; }
+    importItems.push({id: importNextId++, hex, hue: c.hue, sat: c.sat, L: c.L, selected: false});
+    added++;
+  });
+  if(added){ saveImports(); renderImports(); }
+  const parts = ['Добавлено ' + added];
+  if(dup) parts.push('уже есть ' + dup);
+  if(range) parts.push('вне диапазона L ' + range);
+  showToast(parts.join(', ') + '.');
 }
-function applyImport(){
+let importApplied = false;
+function setImportApplied(v){
+  importApplied = v;
+  const b = document.getElementById('importApplyBtn');
+  if(b) b.textContent = v ? 'Отменить' : 'Применить';
+}
+function applyOrCancelImport(){
+  if(importApplied){ cancelImport(); return; }
   const chosen = importItems.filter(x => x.selected);
   if(!chosen.length){ showToast('Отметьте один цвет.'); return; }
   if(chosen.length > 1){ showToast('Отмечено несколько — оставьте одну галку.'); return; }
@@ -1505,6 +1572,23 @@ function applyImport(){
   g('genCount').value = pl ? 7 : 8;
   g('genStartC').value = '';
   g('genEndC').value = '';
+  setImportApplied(true);
+}
+function cancelImport(){
+  const pl = mode === 'plates';
+  const g = id => document.getElementById(id);
+  Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  ['genHue','genStart','genStartC','genEndC'].forEach(id => { g(id).value = ''; });
+  g('genMax').value = 255;
+  g('genSat').value = 100;
+  g('genStep').value = pl ? 5 : 8;
+  g('genCount').value = pl ? 7 : 8;
+  lastRows = null; lastRowsOriginal = null;
+  lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
+  g('genOut').innerHTML = '';
+  g('addBtn').disabled = true;
+  g('refCheckRow').classList.add('hidden');
+  setImportApplied(false);
 }
 function askDeleteImport(){
   const n = importItems.filter(x => x.selected).length;
@@ -1703,6 +1787,7 @@ function applyModeUI(){
   document.getElementById('plateBox').classList.toggle('hidden', pl);
   document.getElementById('fontBox').classList.toggle('hidden', !pl);
   document.getElementById('refFontBlock').classList.toggle('hidden', !pl);
+  document.getElementById('refPlateBlock').classList.toggle('hidden', pl);
   document.getElementById('genStep').value = pl ? 5 : 8;
   document.getElementById('genCount').value = pl ? 7 : 8;
 }
@@ -1725,6 +1810,8 @@ function setMode(m){
   document.getElementById('addBtn').disabled = true;
   document.getElementById('refCheckRow').classList.add('hidden');
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  ['genHue','genStartC','genEndC'].forEach(id => { document.getElementById(id).value = ''; });
+  setImportApplied(false);
   const st = document.getElementById('genStart');
   if(st.value !== '' && !validStartL(parseFloat(st.value))) st.value = '';
   renderSets();
@@ -1743,7 +1830,11 @@ loadNames();
 applyModeUI();
 try{ const d = localStorage.getItem(REF_FONT_DEF_KEY); if(d !== null && d !== '') document.getElementById('refFontDef').value = d; }catch(e){}
 try{ const v = localStorage.getItem(REF_FONT_KEY); if(v !== null) document.getElementById('refFontHue').value = v; }catch(e){}
+try{ const d = localStorage.getItem(REF_PLATE_DEF_KEY); if(d !== null && d !== '') document.getElementById('refPlateDef').value = d; }catch(e){}
+try{ const v = localStorage.getItem(REF_PLATE_KEY); if(v !== null) document.getElementById('refPlateHue').value = v; }catch(e){}
+resetPlateIdxToDefault();
 onRefFontChange();
+onRefPlateChange();
 </script>
 </body>
 </html>
