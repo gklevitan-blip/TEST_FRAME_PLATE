@@ -94,10 +94,15 @@
   .set-header-text{flex:1; min-width:0;}
   .set-header-text b{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; font-weight:700; color:#fff;}
   .del-x{
-    width:22px; height:22px; padding:0; flex-shrink:0;
+    width:44px; height:44px; padding:0; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
-    font-size:13px; line-height:1; border-radius:4px;
+    font-size:26px; line-height:1; border-radius:8px;
   }
+  .imp-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;}
+  .imp-btn{padding:6px 12px; font-size:12px;}
+  .imp-row{display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .imp-row .swatch{width:22px; height:22px; flex-shrink:0;}
+  .imp-sub{font-size:11px; color:var(--dim);}
   .strip{cursor:pointer; display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line);}
   .strip > div{flex:1; min-width:0; height:64px;}
 
@@ -173,15 +178,6 @@
       </div>
     </div>
 
-    <div id="refBlock" class="panel">
-      <h2>Референсные значения</h2>
-      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:0 0 10px;">
-        <input type="checkbox" id="pinRefChk" onchange="onPinRefChange(this.checked)">
-        Закрепить текущий ряд как референс
-      </label>
-      <div id="refOut"></div>
-    </div>
-
     <div id="refFontBlock" class="panel hidden">
       <h2>Референсный FONT</h2>
       <div class="row" style="align-items:flex-end; flex-wrap:nowrap;">
@@ -205,16 +201,24 @@
       <label>Добавить</label>
       <input type="text" id="massAdd">
     </div>
+
+    <div id="importBlock" class="panel">
+      <div class="imp-head">
+        <h2 style="margin:0;">Импорт HEX</h2>
+        <button type="button" class="primary imp-btn" onclick="importHex()">Импорт</button>
+      </div>
+      <div id="importList"></div>
+      <div class="btn-row">
+        <button type="button" onclick="applyImport()">Применить</button>
+        <button type="button" onclick="askDeleteImport()">Удалить</button>
+      </div>
+    </div>
   </div>
 
   <div id="rightCol" class="panel">
     <h2>Построенный ряд</h2>
     <div id="genOut"></div>
-    <div id="refCheckRow" class="hint hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-      <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0;">
-        <input type="checkbox" id="applyRefChk" onchange="onApplyRefChange(this.checked)">
-        Изменить по референсу
-      </label>
+    <div id="refCheckRow" class="hint hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap;">
       <div id="plateBox" style="display:flex; align-items:center; gap:8px;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
           <input type="checkbox" id="plateChk" onchange="onPlateChange()">
@@ -254,12 +258,22 @@
   </div>
 </div>
 
-<div id="clearConfirmModal" class="modal-overlay hidden">
+<div id="importDeleteModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:340px;">
-    <div class="hint" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Удалить все построенные семейства без возможности отмены?</div>
+    <div class="hint" id="importDeleteText" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Удалить отмеченные цвета?</div>
     <div class="btn-row" style="justify-content:space-between;">
-      <button onclick="closeClearConfirm()">Отмена</button>
-      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="clearAll()">Очистить</button>
+      <button onclick="closeImportDelete()">Отмена</button>
+      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="confirmImportDelete()">Удалить</button>
+    </div>
+  </div>
+</div>
+
+<div id="importPasteModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:340px;">
+    <textarea id="importPasteArea" style="width:100%; height:110px; background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:8px; font-size:12px; font-family:monospace;"></textarea>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button onclick="closeImportPaste()">Отмена</button>
+      <button class="primary" onclick="submitImportPaste()">Вставить</button>
     </div>
   </div>
 </div>
@@ -305,7 +319,6 @@
       <button id="selectAllBtn" onclick="selectAllSets()">Выбрать все</button>
       <button onclick="sendToTest()">ЭКСПОРТ</button>
       <button onclick="downloadSelectedTxt()">Создать txt</button>
-      <button id="clearAllBtn" onclick="confirmClearAll()" disabled>Очистить</button>
     </div>
   </div>
   <div id="setsContainer" style="margin-top:38px;"></div>
@@ -342,7 +355,6 @@ function fallbackName(hue){ return mode === 'plates' ? `Plate_${hue}` : `FONT_${
 function zipName(){ return mode === 'plates' ? 'HUE_Plate.zip' : 'HUE_Font.zip'; }
 let lastRows = null;
 let lastRowsOriginal = null;
-let lastRefMode = null; // null | 'safe'
 let lastHue = null;
 let lastMaxVal = null;
 let lastSat = 1.0;
@@ -520,15 +532,11 @@ function buildTable(){
   lastSat = sat;
   lastStep = step;
   lastStepOriginal = step;
-  lastRefMode = null;
 
   renderTable(hue, maxVal, rows, sat, step);
 
   if(returned) returned.dirty = false;
   document.getElementById('refCheckRow').classList.remove('hidden');
-  const applyChk = document.getElementById('applyRefChk');
-  applyChk.checked = false;
-  applyChk.disabled = !reference;
 }
 
 /* ---------- Серые плашки (1 — самая тёмная, 7 — самая светлая) и контраст ---------- */
@@ -660,34 +668,6 @@ function summaryLine(hue, maxVal, rows, sat, step, edited){
   const wrap = (txt, on) => on ? `<span class="edited-param">${txt}</span>` : txt;
   const cPart = `C* ${wrap(Math.round(first.C), edited.startC)}-${wrap(Math.round(last.C), edited.endC)}`;
   return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepVal.toFixed(1)}, ${cPart}, ${first.pct}-${last.pct}%`;
-}
-
-function applyRefMode(mode){
-  const {hue, start, count, maxVal, sat} = currentInputs();
-  if(mode === 'safe'){
-    const {rows, step} = buildRowsByReferenceSafe(hue, start, count, maxVal, sat);
-    lastRows = rows;
-    lastStep = step;
-  } else {
-    lastRows = lastRowsOriginal;
-    lastStep = lastStepOriginal;
-  }
-  lastRefMode = mode;
-  renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
-}
-
-function onApplyRefChange(checked){
-  if(!lastRowsOriginal) return;
-  if(checked){
-    if(!reference){
-      showToast('Нет закреплённого референса.');
-      document.getElementById('applyRefChk').checked = false;
-      return;
-    }
-    applyRefMode('safe');
-  } else {
-    applyRefMode(null);
-  }
 }
 
 function rowsToText(rows){
@@ -851,12 +831,12 @@ function insertSetSorted(newSet){
 
 function addSet(){
   if(!lastRows) return;
-  const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat) + (lastRefMode ? '|'+lastRefMode : '');
+  const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat);
   if(sets.some(s => s.sig === sig)){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, refMode: lastRefMode, name: getNameForHue(lastHue)});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: getNameForHue(lastHue)});
   saveSets();
   renderSets();
   showResults();
@@ -881,7 +861,7 @@ function discardPendingEdit(){
     s.rows = editSession.rows.map(r => ({...r}));
     s.step = editSession.step;
     s.sat = editSession.sat;
-    s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+    s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
   }
   editSession = null;
 }
@@ -993,7 +973,7 @@ function applyEdits(){
   if(unreachable) showToast('Такая C* недостижима для этого hue — взят максимум.');
   s.rows = newRows;
   s.step = step;
-  s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+  s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
   document.getElementById('editStartLVal').value = newRows[0].L;
   document.getElementById('editStartCVal').value = newRows[0].C.toFixed(1);
   document.getElementById('editEndCVal').value = newRows[newRows.length-1].C.toFixed(1);
@@ -1046,11 +1026,11 @@ function commitEdit(mode){
     s.rows = orig.rows.map(r => ({...r}));
     s.step = orig.step;
     s.sat = orig.sat;
-    s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat) + (s.refMode ? '|'+s.refMode : '');
+    s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
     s.selected = false;
     insertSetSorted({
       id: nextId++, hue: s.hue, maxVal: s.maxVal, sat: s.sat, step: editedStep,
-      rows: editedRows, selected: false, sig: newSig, refMode: s.refMode, name: s.name,
+      rows: editedRows, selected: false, sig: newSig, name: s.name,
       editedStartC: flagStart, editedEndC: flagEnd, editTag: 'Добавлен здесь'
     });
   }
@@ -1069,9 +1049,6 @@ function selectAllSets(){
   refreshEditBoxes(); // откатит незакоммиченное превью раньше saveSets()
   saveSets();
   renderSets();
-  if(!allSelected){ // это был клик «Выбрать все» — разблокируем «Очистить»
-    document.getElementById('clearAllBtn').disabled = false;
-  }
 }
 function updateSelectAllBtn(){
   const btn = document.getElementById('selectAllBtn');
@@ -1107,21 +1084,6 @@ function confirmDeleteOne(){
   renderSets();
   refreshEditBoxes();
 }
-function confirmClearAll(){
-  document.getElementById('clearConfirmModal').classList.remove('hidden');
-}
-function closeClearConfirm(){
-  document.getElementById('clearConfirmModal').classList.add('hidden');
-}
-function clearAll(){
-  editSession = null;
-  sets = [];
-  saveSets();
-  renderSets();
-  clearEditBoxesUI();
-  closeClearConfirm();
-}
-
 let expandedSets = new Set();
 
 function contrastHex(a, b){
@@ -1156,10 +1118,10 @@ function renderSets(){
     return;
   }
   container.innerHTML = sets.map((s) => {
-    const tag = (s.refMode === 'safe' ? ' (изменен по референсу)' : '') + (s.editTag ? ' — ' + s.editTag : '');
+    const tag = s.editTag ? ' — ' + s.editTag : '';
     const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
     const isOpen = expandedSets.has(s.id);
-    const strip = s.rows.map((r, i) => `<div style="background:#${r.hex}">${(isOpen && i === 0 && !returned) ? `<span class="ret-icon" onclick="event.stopPropagation(); returnToFirst(${s.id})">↩</span>` : ''}</div>`).join('');
+    const strip = s.rows.map((r, i) => `<div style="background:#${r.hex}">${(isOpen && i === Math.max(0, s.rows.length - 2) && !returned) ? `<span class="ret-icon" onclick="event.stopPropagation(); returnToFirst(${s.id})">↩</span>` : ''}</div>`).join('');
     const detail = isOpen ? detailTable(s.rows) : '';
     return `
       <div class="set-block">
@@ -1207,7 +1169,6 @@ function showSelect(){
   clearEditBoxes();
   lastRows = null;
   lastRowsOriginal = null;
-  lastRefMode = null;
   lastHue = null;
   lastMaxVal = null;
   lastSat = 1.0;
@@ -1215,7 +1176,6 @@ function showSelect(){
   document.getElementById('genMax').value = 255;
   document.getElementById('genSat').value = 100;
   document.getElementById('refCheckRow').classList.add('hidden');
-  document.getElementById('applyRefChk').checked = false;
 }
 
 /* ---------- Возврат семейства со второго экрана на первый ---------- */
@@ -1226,10 +1186,9 @@ function captureFirstScreen(){
   return {
     vals,
     plateChk: g('plateChk').checked, fontChk: g('fontChk').checked,
-    applyRefChk: g('applyRefChk').checked, applyRefDis: g('applyRefChk').disabled,
     rowHidden: g('refCheckRow').classList.contains('hidden'),
     genOut: g('genOut').innerHTML, addDis: g('addBtn').disabled,
-    lastRows, lastRowsOriginal, lastRefMode, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx,
+    lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx,
     autoFill: JSON.parse(JSON.stringify(autoFill))
   };
 }
@@ -1237,10 +1196,9 @@ function restoreFirstScreen(pre){
   const g = id => document.getElementById(id);
   Object.keys(pre.vals).forEach(id => { g(id).value = pre.vals[id]; });
   g('plateChk').checked = pre.plateChk; g('fontChk').checked = pre.fontChk;
-  g('applyRefChk').checked = pre.applyRefChk; g('applyRefChk').disabled = pre.applyRefDis;
   g('refCheckRow').classList.toggle('hidden', pre.rowHidden);
   g('genOut').innerHTML = pre.genOut; g('addBtn').disabled = pre.addDis;
-  lastRows = pre.lastRows; lastRowsOriginal = pre.lastRowsOriginal; lastRefMode = pre.lastRefMode;
+  lastRows = pre.lastRows; lastRowsOriginal = pre.lastRowsOriginal;
   lastHue = pre.lastHue; lastMaxVal = pre.lastMaxVal; lastSat = pre.lastSat;
   lastStep = pre.lastStep; lastStepOriginal = pre.lastStepOriginal;
   lastFontIdx = pre.lastFontIdx; lastPlateIdx = pre.lastPlateIdx;
@@ -1274,11 +1232,9 @@ function populateFromSet(s){
   lastRows = s.rows.map(r => ({...r}));
   lastRowsOriginal = s.rows.map(r => ({...r}));
   lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
-  lastStep = s.step; lastStepOriginal = s.step; lastRefMode = s.refMode || null;
+  lastStep = s.step; lastStepOriginal = s.step;
   resetFontIdxToDefault();
   g('refCheckRow').classList.remove('hidden');
-  g('applyRefChk').checked = lastRefMode === 'safe';
-  g('applyRefChk').disabled = !reference;
   renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
   g('addBtn').disabled = true;
 }
@@ -1367,7 +1323,6 @@ function exitReturn(){
   restoreFirstScreen(pre);
   setReturnRowState(false);
   document.getElementById('returnRow').classList.add('hidden');
-  renderRefBlock();
 }
 
 function saveReturn(){
@@ -1386,7 +1341,7 @@ function commitReturn(m){
   const s = returned && sets.find(x => x.id === returned.id);
   if(!s){ closeSaveChoice(); return; }
   const rows = lastRows.map(r => ({...r}));
-  const sig = computeSignature(lastHue, lastMaxVal, rows, lastSat) + (lastRefMode ? '|' + lastRefMode : '');
+  const sig = computeSignature(lastHue, lastMaxVal, rows, lastSat);
   if(sets.some(x => x !== s && x.sig === sig) || (m === 'new' && s.sig === sig)){
     closeSaveChoice();
     showToast('Такой ряд уже есть.');
@@ -1397,7 +1352,7 @@ function commitReturn(m){
   const name = lastHue !== s.hue ? getNameForHue(lastHue) : s.name;
   const base = {
     hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows, selected: false,
-    sig, refMode: lastRefMode, name, editedStartC: flagStart, editedEndC: flagEnd
+    sig, name, editedStartC: flagStart, editedEndC: flagEnd
   };
   if(m === 'replace'){
     sets = sets.filter(x => x !== s);
@@ -1442,24 +1397,6 @@ function labC(r,g,b){
   const bb = 200*(fy-fz);
   return {Lst, C: Math.sqrt(a*a+bb*bb)};
 }
-// Первое L (сканируя от белого, 254→1), где C*(hue,L) достигает targetC
-function findBoundaryL(hue, targetC, maxVal, sat){
-  if(sat===undefined) sat=1.0;
-  const {peakL} = findPeakC(hue, maxVal, sat);
-  if(mode === 'plates'){
-    for(let L=1; L<=peakL; L++){
-      const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
-      if(labC(r,g,b).C >= targetC) return L;
-    }
-    return peakL;
-  }
-  for(let L=254; L>=peakL; L--){
-    const [r,g,b] = hlsToRgb(hue, L/255, sat, maxVal);
-    if(labC(r,g,b).C >= targetC) return L;
-  }
-  return peakL; // цель физически недостижима для этого hue — не ныряем глубже собственного пика
-}
-
 function findPeakC(hue, maxVal, sat){
   if(sat===undefined) sat=1.0;
   let peakC = 0, peakL = 128;
@@ -1471,68 +1408,116 @@ function findPeakC(hue, maxVal, sat){
   return {peakC, peakL};
 }
 
-/* ---------- Референс: закрепление и применение ---------- */
-function refKey(){ return mode === 'plates' ? 'generator_obojm_plate_ref_v1' : 'generator_obojm_ref_v1'; }
-let reference = null; // {hue, maxVal, rows:[{hex,L}], boundaryC, boundaryLst}
 
-function saveRef(){
-  try{ localStorage.setItem(refKey(), JSON.stringify(reference)); }
-  catch(e){ console.error('Не удалось сохранить референс:', e); }
+/* ---------- Импорт HEX (из TEST через буфер обмена) ---------- */
+const IMPORT_KEYS = {fonts:'generator_obojm_import_fonts_v1', plates:'generator_obojm_import_plates_v1'};
+let importItems = [];
+let importNextId = 1;
+function saveImports(){
+  try{ localStorage.setItem(IMPORT_KEYS[mode], JSON.stringify({items: importItems, nextId: importNextId})); }catch(e){}
 }
-function loadRef(){
+function loadImports(){
+  importItems = []; importNextId = 1;
   try{
-    const raw = localStorage.getItem(refKey());
-    if(raw) reference = JSON.parse(raw);
-  }catch(e){ console.error('Не удалось загрузить референс:', e); }
+    const raw = localStorage.getItem(IMPORT_KEYS[mode]);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(d && Array.isArray(d.items)){
+      importItems = d.items;
+      importNextId = d.nextId || (importItems.reduce((m,x) => Math.max(m, x.id), 0) + 1);
+    }
+  }catch(e){}
 }
-
-function onPinRefChange(checked){
-  if(!checked) return; // отмена вручную не предусмотрена — только кнопка «Очистить референс»
-  if(!lastRows){ showToast('Сначала постройте ряд.'); document.getElementById('pinRefChk').checked=false; return; }
-  const last = lastRows[lastRows.length-1];
-  const [r,g,b] = hlsToRgb(lastHue, last.L/255, lastSat, lastMaxVal);
-  const {C} = labC(r,g,b);
-  reference = {
-    hue: lastHue,
-    maxVal: lastMaxVal,
-    sat: lastSat,
-    boundaryC: C,
-    summary: summaryLine(lastHue, lastMaxVal, lastRows, lastSat, lastStep)
-  };
-  saveRef();
-  renderRefBlock();
-  const applyChk = document.getElementById('applyRefChk');
-  if(applyChk) applyChk.disabled = false;
+function hexToHls(hex){
+  const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b), d = mx - mn;
+  let h = 0, s = 0;
+  if(d > 0){
+    if(mx === r) h = 60 * (((g - b) / d) % 6);
+    else if(mx === g) h = 60 * ((b - r) / d + 2);
+    else h = 60 * ((r - g) / d + 4);
+    if(h < 0) h += 360;
+    s = d / (255 - Math.abs(mx + mn - 255));
+  }
+  return {hue: Math.round(h) % 360, sat: Math.round(s * 100), L: Math.round((mx + mn) / 2)};
 }
-
-function clearRef(){
-  reference = null;
-  saveRef();
-  renderRefBlock();
-  const applyChk = document.getElementById('applyRefChk');
-  if(applyChk) applyChk.disabled = true;
+function renderImports(){
+  const box = document.getElementById('importList');
+  if(!box) return;
+  box.innerHTML = importItems.map(x => `
+    <div class="imp-row">
+      <input type="checkbox" ${x.selected ? 'checked' : ''} onchange="toggleImport(${x.id}, this.checked)">
+      <span class="swatch" style="background:#${x.hex}"></span>
+      <b>${x.hue}°</b>
+      <span class="imp-sub">S ${x.sat} · L ${x.L}</span>
+    </div>`).join('');
 }
-
-function renderRefBlock(){
-  const out = document.getElementById('refOut');
-  const pinChk = document.getElementById('pinRefChk');
-  pinChk.checked = !!reference;
-  pinChk.disabled = !!reference;
-  if(!reference){
-    out.innerHTML = '';
+function toggleImport(id, checked){
+  const x = importItems.find(v => v.id === id);
+  if(x) x.selected = checked;
+  saveImports();
+}
+async function importHex(){
+  let text = null;
+  try{ text = await navigator.clipboard.readText(); }catch(e){ text = null; }
+  if(text === null){
+    document.getElementById('importPasteArea').value = '';
+    document.getElementById('importPasteModal').classList.remove('hidden');
     return;
   }
-  out.innerHTML = `
-    <div class="hint">${reference.summary}</div>
-    <div class="btn-row"><button onclick="clearRef()">Очистить референс</button></div>
-  `;
+  processImportText(text);
 }
-
-function buildRowsByReferenceSafe(hue, start, count, maxVal, sat){
-  if(sat===undefined) sat=1.0;
-  const boundaryL = findBoundaryL(hue, reference.boundaryC, maxVal, sat);
-  const newStep = count > 1 ? (boundaryL - start) * rowDir() / (count - 1) : 0;
-  return {rows: buildRows(hue, start, newStep, count, maxVal, sat), step: newStep, boundaryL};
+function closeImportPaste(){ document.getElementById('importPasteModal').classList.add('hidden'); }
+function submitImportPaste(){
+  const t = document.getElementById('importPasteArea').value;
+  closeImportPaste();
+  processImportText(t);
+}
+function processImportText(text){
+  let p = null;
+  try{ p = JSON.parse(text); }catch(e){ p = null; }
+  if(!p || p.type !== 'obojm_hex_import' || !Array.isArray(p.items)){ showToast('В буфере нет цвета из TEST.'); return; }
+  const kind = mode === 'plates' ? 'bg' : 'text';
+  const it = p.items.find(v => v && v.kind === kind && /^[0-9A-Fa-f]{6}$/.test(String(v.hex)));
+  if(!it){ showToast(mode === 'plates' ? 'В буфере нет цвета для Plates.' : 'В буфере нет цвета для Fonts.'); return; }
+  const hex = String(it.hex).toUpperCase();
+  const c = hexToHls(hex);
+  if(!validStartL(c.L)){ showToast(`Нет импорта: L=${c.L} вне диапазона ` + (mode === 'plates' ? 'Plates (0–99).' : 'Fonts (100–255).')); return; }
+  if(importItems.some(x => x.hex === hex)){ showToast('Уже есть.'); return; }
+  importItems.push({id: importNextId++, hex, hue: c.hue, sat: c.sat, L: c.L, selected: false});
+  saveImports();
+  renderImports();
+  showToast('Импортировано.');
+}
+function applyImport(){
+  const chosen = importItems.filter(x => x.selected);
+  if(!chosen.length){ showToast('Отметьте один цвет.'); return; }
+  if(chosen.length > 1){ showToast('Отмечено несколько — оставьте одну галку.'); return; }
+  const x = chosen[0];
+  const pl = mode === 'plates';
+  const g = id => document.getElementById(id);
+  Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  g('genHue').value = x.hue;
+  g('genStart').value = x.L;
+  g('genMax').value = 255;
+  g('genSat').value = x.sat;
+  g('genStep').value = pl ? 5 : 8;
+  g('genCount').value = pl ? 7 : 8;
+  g('genStartC').value = '';
+  g('genEndC').value = '';
+}
+function askDeleteImport(){
+  const n = importItems.filter(x => x.selected).length;
+  if(!n){ showToast('Ничего не отмечено.'); return; }
+  document.getElementById('importDeleteText').textContent = `Удалить отмеченные цвета (${n})?`;
+  document.getElementById('importDeleteModal').classList.remove('hidden');
+}
+function closeImportDelete(){ document.getElementById('importDeleteModal').classList.add('hidden'); }
+function confirmImportDelete(){
+  importItems = importItems.filter(x => !x.selected);
+  saveImports();
+  renderImports();
+  closeImportDelete();
 }
 
 function parseHueList(str){
@@ -1577,7 +1562,7 @@ function createForAllHues(){
     if(!rows.length){ skipped++; return; }
     const sig = computeSignature(h, maxVal, rows, sat);
     if(sets.some(x => x.sig === sig)){ skipped++; return; }
-    insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, refMode:null, name: getNameForHue(h)});
+    insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, name: getNameForHue(h)});
     made++;
   });
   saveSets();
@@ -1732,15 +1717,13 @@ function setMode(m){
   hueNames = [];
   loadSets();
   loadNames();
-  reference = null;
-  loadRef();
-  renderRefBlock();
-  lastRows = null; lastRowsOriginal = null; lastRefMode = null;
+  loadImports();
+  renderImports();
+  lastRows = null; lastRowsOriginal = null;
   lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
   document.getElementById('genOut').innerHTML = '';
   document.getElementById('addBtn').disabled = true;
   document.getElementById('refCheckRow').classList.add('hidden');
-  document.getElementById('applyRefChk').checked = false;
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
   const st = document.getElementById('genStart');
   if(st.value !== '' && !validStartL(parseFloat(st.value))) st.value = '';
@@ -1752,9 +1735,9 @@ try{
   const m = localStorage.getItem(MODE_KEY);
   if(m === 'plates' || m === 'fonts') mode = m;
 }catch(e){}
-loadRef();
-renderRefBlock();
 loadSets();
+loadImports();
+renderImports();
 renderSets();
 loadNames();
 applyModeUI();

@@ -567,7 +567,7 @@
           <div class="swatch-row" id="fgSwatches" style="margin-top:10px;"></div>
           <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
             <div class="rainbow-wrap"><input type="color" id="fgCustomColor"></div>
-            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+            <span style="font-size:12px; color:var(--ink-dim);">или RGB</span>
           </div>
         </div>
         <div class="control-block">
@@ -576,7 +576,7 @@
           <div class="swatch-row" id="bgSwatches" style="margin-top:10px;"></div>
           <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
             <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
-            <span style="font-size:12px; color:var(--ink-dim);">или свой цвет</span>
+            <span style="font-size:12px; color:var(--ink-dim);">или RGB</span>
           </div>
         </div>
 
@@ -607,7 +607,10 @@
 
         <div class="control-block full-width">
           <textarea id="comboListArea" style="width:100%; height:110px; margin-top:0; background:var(--panel-bg); color:var(--ink); border:1px solid var(--panel-line); border-radius:8px; padding:8px; font-size:12px; font-family:monospace; resize:vertical;"></textarea>
-          <button id="clearListBtn" class="btn" style="width:100%; margin-top:8px;">🗑 Очистить список сочетаний</button>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button id="clearListBtn" class="btn" style="flex:1 1 0; min-width:0;">🗑 Очистить список сочетаний</button>
+            <button id="exportHexBtn" class="btn" style="flex:1 1 0; min-width:0; background:#2f7de1; border-color:#2f7de1; color:#fff;" disabled>Экспорт HEX</button>
+          </div>
         </div>
       </div>
     </div>
@@ -926,7 +929,7 @@ function populateFsSelect(sel, obj, onFamily, onCustom){
   });
   const customOpt = document.createElement("option");
   customOpt.value = "__custom__";
-  customOpt.textContent = "Свой цвет";
+  customOpt.textContent = "RGB";
   sel.appendChild(customOpt);
   sel.onchange = () => {
     if (sel.value === "__custom__") onCustom();
@@ -1049,14 +1052,14 @@ function syncFgUI(){
 
 function bgLabel(){
   const f = activeFrame();
-  if (f.bgCustomHex) return "Свой_" + currentBgHex().replace("#","").toUpperCase();
+  if (f.bgCustomHex) return "RGB_" + currentBgHex().replace("#","").toUpperCase();
   const list = DATA.bg[f.bgFamily].list;
   const idx = clampIndex(f.bgIndex, list.length);
   return f.bgFamily + "_" + currentBgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
 }
 function fgLabel(){
   const f = activeFrame();
-  if (f.fgCustomHex) return "Свой_" + currentFgHex().replace("#","").toUpperCase();
+  if (f.fgCustomHex) return "RGB_" + currentFgHex().replace("#","").toUpperCase();
   const list = DATA.text[f.fgFamily].list;
   const idx = clampIndex(f.fgIndex, list.length);
   return f.fgFamily + "_" + currentFgHex().replace("#","").toUpperCase() + " (" + (idx+1) + ")";
@@ -1350,6 +1353,7 @@ function addComboToList(triggerBtn){
   });
 
   saveState();
+  updateExportBtn();
   flashBtn(triggerBtn, "Добавлено ✓");
 }
 document.getElementById("addToListBtn").addEventListener("click", () => {
@@ -1388,7 +1392,7 @@ function normalizeSavedCombo(c){
 function hexWithFamily(entry){
   const hex = entry.hex.replace("#","").toUpperCase();
   if (entry.family) return hex + "(" + entry.family + ", " + entry.index + ")";
-  return hex + "(custom)";
+  return hex + "(RGB)";
 }
 
 function formatCombosTxt(){
@@ -1474,6 +1478,25 @@ document.getElementById("clearListBtn").addEventListener("click", () => {
   state.comboList = "";
   state.savedCombos = [];
   saveState();
+  updateExportBtn();
+});
+
+function rgbEntries(){
+  if (state.savedCombos.length !== 1) return [];
+  const c = state.savedCombos[0];
+  const out = [];
+  if (c.font && !c.font.family) out.push({ kind: "text", hex: c.font.hex.replace("#","").toUpperCase() });
+  if (c.plate && !c.plate.family) out.push({ kind: "bg", hex: c.plate.hex.replace("#","").toUpperCase() });
+  return out;
+}
+function updateExportBtn(){
+  document.getElementById("exportHexBtn").disabled = rgbEntries().length === 0;
+}
+document.getElementById("exportHexBtn").addEventListener("click", () => {
+  const items = rgbEntries();
+  if (!items.length) return;
+  copyText(JSON.stringify({ type: "obojm_hex_import", items: items }));
+  flashBtn(document.getElementById("exportHexBtn"), "Скопировано ✓");
 });
 
 /* ---------- frame gallery ---------- */
@@ -1666,6 +1689,7 @@ window.addEventListener('resize', () => { applySizes(); });
 
 /* ---------- init ---------- */
 document.getElementById("comboListArea").value = state.comboList || "";
+updateExportBtn();
 syncBgUI();
 syncFgUI();
 updateStage();
