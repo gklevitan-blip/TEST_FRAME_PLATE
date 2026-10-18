@@ -863,17 +863,21 @@ function updateExportBtn(){
   const b = document.getElementById('exportBtn');
   if(!b) return;
   const p = getRecon().pending;
-  b.textContent = p ? 'Сверка' : 'ЭКСПОРТ';
+  const anySel = sets.some(x => x.selected);
+  b.innerHTML = p ? 'ЭКСПОРТ<span style="display:block;font-size:10px;font-weight:400;line-height:1.3;">сверка</span>' : (anySel ? 'ЭКСПОРТ' : 'CONNECT');
   b.style.background = p ? 'hsl(48 100% 50%)' : '';
   b.style.borderColor = p ? 'hsl(48 100% 50%)' : '';
   b.style.color = p ? 'hsl(0 0% 10%)' : '';
 }
-function onExportBtn(){ if(getRecon().pending) reconTap(); else sendToTest(); }
+function onExportBtn(){
+  if(getRecon().pending){ reconTap(); return; }
+  if(sets.some(x => x.selected)) sendToTest(); else reconTap();
+}
 function startRecon(){ setRecon({pending: true, ignored: {}}); }
-function closeRecon(done){
+function closeRecon(msg){
   setRecon({pending: false, ignored: {}});
   document.getElementById('reconModal').classList.add('hidden');
-  if(done) showToast('Сверка закрыта.');
+  if(msg) showToast(msg);
 }
 function curKind(){ return mode === 'plates' ? 'bg' : 'text'; }
 function normalizeSetForRecon(s){
@@ -973,7 +977,7 @@ async function reconTap(){
 function processReconText(text){
   let p = null;
   try{ p = JSON.parse(text); }catch(e){ p = null; }
-  if(!p || p.type !== 'obojm_recon' || !p.kinds){ showToast('Снимка от TEST нет.'); return; }
+  if(!p || p.type !== 'obojm_recon' || !p.kinds){ showToast('Данных из TEST нет.'); return; }
   if(hasUnsavedEdit()){ showToast('Есть несохранённые изменения — нажмите OK или снимите галку.'); return; }
   saveSets();
   const r = reconCompare(p);
@@ -992,22 +996,15 @@ function processReconText(text){
   const ign = {};
   r.items.forEach(it => { if(rec.ignored[it.key] === it.sig) ign[it.key] = it.sig; });
   reconItems = r.items;
-  setRecon({pending: true, ignored: ign});
-  if(reconUnresolved() === 0){ closeRecon(true); return; }
+  setRecon({pending: rec.pending, ignored: ign});
+  if(reconUnresolved() === 0){ closeRecon('Расхождений нет.'); return; }
   renderRecon();
   document.getElementById('reconModal').classList.remove('hidden');
 }
 function escHtml(v){ return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function renderRecon(){
   const ign = getRecon().ignored;
-  const groups = [['gen', 'Нет в TEST'], ['test', 'Нет в генераторе']];
   let html = '';
-  groups.forEach(([ty, lbl]) => {
-    const list = reconItems.filter(it => it.type === ty);
-    if(!list.length) return;
-    const all = list.every(it => ign[it.key] === it.sig);
-    html += `<div class="rec-row"><input type="checkbox" ${all ? 'checked' : ''} onchange="reconGroup('${ty}', this.checked)"><div><b>${lbl}</b></div></div>`;
-  });
   reconItems.forEach((it, i) => {
     html += `<div class="rec-row"><input type="checkbox" ${ign[it.key] === it.sig ? 'checked' : ''} onchange="reconToggle(${i}, this.checked)"><div><b>${escHtml(it.label)} · ${escHtml(it.name)}</b>` +
       it.lines.map(l => `<div class="rec-sub">${escHtml(l)}</div>`).join('') + '</div></div>';
@@ -1020,19 +1017,9 @@ function reconToggle(i, checked){
   const rec = getRecon();
   if(checked) rec.ignored[it.key] = it.sig; else delete rec.ignored[it.key];
   setRecon(rec);
-  if(reconUnresolved() === 0){ closeRecon(true); return; }
+  if(reconUnresolved() === 0){ closeRecon('Сверка закрыта.'); return; }
   renderRecon();
 }
-function reconGroup(ty, checked){
-  const rec = getRecon();
-  reconItems.filter(it => it.type === ty).forEach(it => {
-    if(checked) rec.ignored[it.key] = it.sig; else delete rec.ignored[it.key];
-  });
-  setRecon(rec);
-  if(reconUnresolved() === 0){ closeRecon(true); return; }
-  renderRecon();
-}
-
 function afterDownloadSelected(){
   sets.forEach(s => { s.selected = false; });
   refreshEditBoxes();
@@ -1316,6 +1303,7 @@ function updateSelectAllBtn(){
   if(!btn) return;
   const allSelected = sets.length > 0 && sets.every(s => s.selected);
   btn.textContent = allSelected ? 'Снять выделение' : 'Выбрать все';
+  updateExportBtn();
 }
 let pendingDeleteId = null;
 function deleteOne(id){
