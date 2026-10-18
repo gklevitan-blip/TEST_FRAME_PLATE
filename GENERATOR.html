@@ -100,6 +100,9 @@
   }
   .imp-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;}
   .imp-btn{padding:6px 12px; font-size:12px;}
+  .rec-row{display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  .rec-row > div{flex:1; min-width:0;}
+  .rec-sub{font-size:11px; color:var(--dim); font-family:ui-monospace,Menlo,monospace; word-break:break-word; margin-top:2px;}
   .imp-row{display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); font-size:14px;}
   .imp-row .swatch{width:22px; height:22px; flex-shrink:0;}
   .imp-sub{font-size:11px; color:var(--dim);}
@@ -298,6 +301,15 @@
   </div>
 </div>
 
+<div id="reconModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px;">
+    <div id="reconBody"></div>
+    <div class="btn-row" style="justify-content:flex-end;">
+      <button onclick="document.getElementById('reconModal').classList.add('hidden')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 <div id="saveChoiceModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:340px;">
     <div class="hint" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Как сохранить правку?</div>
@@ -327,7 +339,7 @@
     </div>
     <div class="right-actions">
       <button id="selectAllBtn" onclick="selectAllSets()">Выбрать все</button>
-      <button onclick="sendToTest()">ЭКСПОРТ</button>
+      <button id="exportBtn" onclick="onExportBtn()">ЭКСПОРТ</button>
       <button onclick="downloadSelectedTxt()">Создать txt</button>
     </div>
   </div>
@@ -821,8 +833,204 @@ function sendToTest(){
     }))
   };
   copyText(JSON.stringify(payload))
-    .then(() => { showToast('Скопировано: ' + chosen.length); afterDownloadSelected(); })
+    .then(() => { showToast('Скопировано: ' + chosen.length); startRecon(); afterDownloadSelected(); })
     .catch(() => showToast('Не удалось скопировать.'));
+}
+
+function changeSuffix(s){
+  if(s.isNew) return ' (Добавлено)';
+  if(s.wasParams) return ' (Изменение: было ' + String(s.wasParams).replace(/&/g,'&amp;').replace(/</g,'&lt;') + ')';
+  if(s.editTag === 'Изменен') return ' (Изменение)';
+  return '';
+}
+
+/* ---------- Сверка с TEST ---------- */
+const RECON_KEY = 'generator_obojm_recon_v1';
+const KIND_STORE = {text: 'generator_obojm_sets_v1', bg: 'generator_obojm_plates_v1'};
+let reconItems = [];
+function getRecon(){
+  try{
+    const r = JSON.parse(localStorage.getItem(RECON_KEY));
+    if(r && typeof r === 'object') return {pending: !!r.pending, ignored: r.ignored || {}};
+  }catch(e){}
+  return {pending: false, ignored: {}};
+}
+function setRecon(r){
+  try{ localStorage.setItem(RECON_KEY, JSON.stringify(r)); }catch(e){}
+  updateExportBtn();
+}
+function updateExportBtn(){
+  const b = document.getElementById('exportBtn');
+  if(!b) return;
+  const p = getRecon().pending;
+  b.textContent = p ? 'Сверка' : 'ЭКСПОРТ';
+  b.style.background = p ? 'hsl(48 100% 50%)' : '';
+  b.style.borderColor = p ? 'hsl(48 100% 50%)' : '';
+  b.style.color = p ? 'hsl(0 0% 10%)' : '';
+}
+function onExportBtn(){ if(getRecon().pending) reconTap(); else sendToTest(); }
+function startRecon(){ setRecon({pending: true, ignored: {}}); }
+function closeRecon(done){
+  setRecon({pending: false, ignored: {}});
+  document.getElementById('reconModal').classList.add('hidden');
+  if(done) showToast('Сверка закрыта.');
+}
+function curKind(){ return mode === 'plates' ? 'bg' : 'text'; }
+function normalizeSetForRecon(s){
+  if(s.maxVal === undefined) s.maxVal = 255;
+  if(s.sat === undefined) s.sat = 1.0;
+  if(s.step === undefined) s.step = (s.rows && s.rows.length > 1) ? (s.rows[0].L - s.rows[1].L) : 0;
+  if(s.name === undefined) s.name = '';
+  s.rows.forEach(r => {
+    if(r.C === undefined){
+      const rr = parseInt(r.hex.slice(0,2),16), gg = parseInt(r.hex.slice(2,4),16), bb = parseInt(r.hex.slice(4,6),16);
+      r.C = labC(rr,gg,bb).C;
+    }
+  });
+}
+function kindSets(kind){
+  if(kind === curKind()) return {list: sets, raw: null};
+  try{
+    const d = JSON.parse(localStorage.getItem(KIND_STORE[kind]));
+    if(d && Array.isArray(d.sets)) return {list: d.sets, raw: d};
+  }catch(e){}
+  return {list: [], raw: null};
+}
+function genFamInfo(s, kind){
+  return {
+    name: (s.name ? s.name : (kind === 'bg' ? 'Plate_' + s.hue : 'FONT_' + s.hue)).trim(),
+    hue: Number(s.hue),
+    params: summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step),
+    list: s.rows.map(r => String(r.hex).replace('#','').toUpperCase() + ':' + r.L),
+    ref: s
+  };
+}
+function reconCompare(snap){
+  const items = [], matched = [], raws = {};
+  [['text','Fonts'], ['bg','Plates']].forEach(([kind, label]) => {
+    const gl = kindSets(kind);
+    raws[kind] = gl.raw;
+    const gens = gl.list.map(s => { normalizeSetForRecon(s); return genFamInfo(s, kind); });
+    const tk = (snap.kinds && snap.kinds[kind]) || {};
+    const tst = {};
+    Object.keys(tk).forEach(n => {
+      const f = tk[n] || {};
+      tst[n.toLowerCase()] = {
+        name: n,
+        hue: (f.hue === null || f.hue === undefined) ? null : Number(f.hue),
+        params: String(f.params || '').trim(),
+        list: (Array.isArray(f.list) ? f.list : []).map(x => String(x).toUpperCase())
+      };
+    });
+    const used = new Set();
+    gens.forEach(g => {
+      const t = tst[g.name.toLowerCase()];
+      if(!t){
+        items.push({kind, label, name: g.name, type: 'gen', lines: [g.params], sig: JSON.stringify([g.hue, g.params, g.list])});
+        return;
+      }
+      used.add(g.name.toLowerCase());
+      const lines = [];
+      if(t.hue !== g.hue) lines.push('hue: ' + g.hue + ' ≠ ' + (t.hue === null ? '—' : t.hue));
+      if(t.params && t.params !== g.params) lines.push('параметры: ' + g.params + ' ≠ ' + t.params);
+      if(g.list.length !== t.list.length) lines.push('строк: ' + g.list.length + ' ≠ ' + t.list.length);
+      else {
+        const d = g.list.filter((x, i) => x !== t.list[i]).length;
+        if(d) lines.push('значения: различается ' + d + ' из ' + g.list.length);
+      }
+      if(!lines.length){ matched.push({kind, s: g.ref}); return; }
+      items.push({kind, label, name: g.name, type: 'diff', lines, sig: JSON.stringify([g.hue, g.params, g.list, t.hue, t.params, t.list])});
+    });
+    Object.keys(tst).forEach(k => {
+      if(used.has(k)) return;
+      const t = tst[k];
+      items.push({kind, label, name: t.name, type: 'test', lines: [t.params || ('hue=' + t.hue)], sig: JSON.stringify([t.hue, t.params, t.list])});
+    });
+  });
+  const cnt = {};
+  items.forEach(it => {
+    const base = it.kind + '|' + it.name.toLowerCase() + '|' + it.type;
+    cnt[base] = (cnt[base] || 0) + 1;
+    it.key = base + '|' + cnt[base];
+  });
+  return {items, matched, raws};
+}
+function reconUnresolved(){
+  const ign = getRecon().ignored;
+  return reconItems.filter(it => ign[it.key] !== it.sig).length;
+}
+async function reconTap(){
+  let text = null;
+  try{ text = await navigator.clipboard.readText(); }catch(e){ text = null; }
+  if(text === null){
+    document.getElementById('importPasteArea').value = '';
+    importPasteTarget = processReconText;
+    document.getElementById('importPasteModal').classList.remove('hidden');
+    return;
+  }
+  processReconText(text);
+}
+function processReconText(text){
+  let p = null;
+  try{ p = JSON.parse(text); }catch(e){ p = null; }
+  if(!p || p.type !== 'obojm_recon' || !p.kinds){ showToast('Снимка от TEST нет.'); return; }
+  if(hasUnsavedEdit()){ showToast('Есть несохранённые изменения — нажмите OK или снимите галку.'); return; }
+  saveSets();
+  const r = reconCompare(p);
+  // совпавшие с TEST семейства больше не помечаются как изменённые/добавленные
+  r.matched.forEach(m => {
+    const s = m.s;
+    delete s.isNew; delete s.wasParams; delete s.editTag; delete s.editedStartC; delete s.editedEndC;
+  });
+  ['text','bg'].forEach(kind => {
+    if(kind === curKind()) return;
+    if(r.raws[kind]){ try{ localStorage.setItem(KIND_STORE[kind], JSON.stringify(r.raws[kind])); }catch(e){} }
+  });
+  saveSets();
+  renderSets();
+  const rec = getRecon();
+  const ign = {};
+  r.items.forEach(it => { if(rec.ignored[it.key] === it.sig) ign[it.key] = it.sig; });
+  reconItems = r.items;
+  setRecon({pending: true, ignored: ign});
+  if(reconUnresolved() === 0){ closeRecon(true); return; }
+  renderRecon();
+  document.getElementById('reconModal').classList.remove('hidden');
+}
+function escHtml(v){ return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function renderRecon(){
+  const ign = getRecon().ignored;
+  const groups = [['gen', 'Нет в TEST'], ['test', 'Нет в генераторе']];
+  let html = '';
+  groups.forEach(([ty, lbl]) => {
+    const list = reconItems.filter(it => it.type === ty);
+    if(!list.length) return;
+    const all = list.every(it => ign[it.key] === it.sig);
+    html += `<div class="rec-row"><input type="checkbox" ${all ? 'checked' : ''} onchange="reconGroup('${ty}', this.checked)"><div><b>${lbl}</b></div></div>`;
+  });
+  reconItems.forEach((it, i) => {
+    html += `<div class="rec-row"><input type="checkbox" ${ign[it.key] === it.sig ? 'checked' : ''} onchange="reconToggle(${i}, this.checked)"><div><b>${escHtml(it.label)} · ${escHtml(it.name)}</b>` +
+      it.lines.map(l => `<div class="rec-sub">${escHtml(l)}</div>`).join('') + '</div></div>';
+  });
+  document.getElementById('reconBody').innerHTML = html;
+}
+function reconToggle(i, checked){
+  const it = reconItems[i];
+  if(!it) return;
+  const rec = getRecon();
+  if(checked) rec.ignored[it.key] = it.sig; else delete rec.ignored[it.key];
+  setRecon(rec);
+  if(reconUnresolved() === 0){ closeRecon(true); return; }
+  renderRecon();
+}
+function reconGroup(ty, checked){
+  const rec = getRecon();
+  reconItems.filter(it => it.type === ty).forEach(it => {
+    if(checked) rec.ignored[it.key] = it.sig; else delete rec.ignored[it.key];
+  });
+  setRecon(rec);
+  if(reconUnresolved() === 0){ closeRecon(true); return; }
+  renderRecon();
 }
 
 function afterDownloadSelected(){
@@ -854,6 +1062,7 @@ function loadSets(){
         if(s.sat === undefined) s.sat = 1.0;
         if(s.step === undefined) s.step = (s.rows && s.rows.length>1) ? (s.rows[0].L - s.rows[1].L) : 0;
         if(s.name === undefined) s.name = '';
+        if(s.editTag === 'Добавлен здесь' && s.isNew === undefined) s.isNew = true;
         s.rows.forEach(r => {
           if(r.C === undefined){
             const rr = parseInt(r.hex.slice(0,2),16), gg = parseInt(r.hex.slice(2,4),16), bb = parseInt(r.hex.slice(4,6),16);
@@ -887,7 +1096,7 @@ function addSet(){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: getNameForHue(lastHue)});
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: getNameForHue(lastHue), isNew:true});
   saveSets();
   renderSets();
   showResults();
@@ -1064,6 +1273,7 @@ function commitEdit(mode){
     s.editedStartC = flagStart;
     s.editedEndC = flagEnd;
     s.editTag = 'Изменен';
+    if(!s.isNew && !s.wasParams) s.wasParams = summaryLine(s.hue, s.maxVal, orig.rows, orig.sat, orig.step);
     s.selected = false;
   } else {
     const newSig = s.sig;
@@ -1082,7 +1292,7 @@ function commitEdit(mode){
     insertSetSorted({
       id: nextId++, hue: s.hue, maxVal: s.maxVal, sat: s.sat, step: editedStep,
       rows: editedRows, selected: false, sig: newSig, name: s.name,
-      editedStartC: flagStart, editedEndC: flagEnd, editTag: 'Добавлен здесь'
+      editedStartC: flagStart, editedEndC: flagEnd, editTag: 'Добавлен здесь', isNew: true
     });
   }
   editSession = null;
@@ -1171,7 +1381,7 @@ function renderSets(){
     return;
   }
   container.innerHTML = sets.map((s) => {
-    const tag = s.editTag ? ' — ' + s.editTag : '';
+    const tag = changeSuffix(s);
     const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
     const isOpen = expandedSets.has(s.id);
     const strip = s.rows.map((r, i) => `<div style="background:#${r.hex}">${(isOpen && i === Math.max(0, s.rows.length - 2) && !returned) ? `<span class="ret-icon" onclick="event.stopPropagation(); returnToFirst(${s.id})">↩</span>` : ''}</div>`).join('');
@@ -1401,6 +1611,7 @@ function commitReturn(m){
     showToast('Такой ряд уже есть.');
     return;
   }
+  const wasP = s.isNew ? undefined : (s.wasParams || summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step));
   const flagStart = rows[0].L !== s.rows[0].L;
   const flagEnd = rows[rows.length-1].L !== s.rows[s.rows.length-1].L;
   const name = lastHue !== s.hue ? getNameForHue(lastHue) : s.name;
@@ -1410,9 +1621,9 @@ function commitReturn(m){
   };
   if(m === 'replace'){
     sets = sets.filter(x => x !== s);
-    insertSetSorted({...base, id: s.id, editTag: 'Изменен'});
+    insertSetSorted({...base, id: s.id, editTag: 'Изменен', isNew: !!s.isNew, wasParams: wasP});
   } else {
-    insertSetSorted({...base, id: nextId++, editTag: 'Добавлен здесь'});
+    insertSetSorted({...base, id: nextId++, editTag: 'Добавлен здесь', isNew: true});
   }
   closeSaveChoice();
   saveSets();
@@ -1516,16 +1727,19 @@ async function importHex(){
   try{ text = await navigator.clipboard.readText(); }catch(e){ text = null; }
   if(text === null){
     document.getElementById('importPasteArea').value = '';
+    importPasteTarget = null;
     document.getElementById('importPasteModal').classList.remove('hidden');
     return;
   }
   processImportText(text);
 }
-function closeImportPaste(){ document.getElementById('importPasteModal').classList.add('hidden'); }
+let importPasteTarget = null;
+function closeImportPaste(){ importPasteTarget = null; document.getElementById('importPasteModal').classList.add('hidden'); }
 function submitImportPaste(){
   const t = document.getElementById('importPasteArea').value;
+  const f = importPasteTarget;
   closeImportPaste();
-  processImportText(t);
+  if(f) f(t); else processImportText(t);
 }
 function processImportText(text){
   let p = null;
@@ -1646,7 +1860,7 @@ function createForAllHues(){
     if(!rows.length){ skipped++; return; }
     const sig = computeSignature(h, maxVal, rows, sat);
     if(sets.some(x => x.sig === sig)){ skipped++; return; }
-    insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, name: getNameForHue(h)});
+    insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, name: getNameForHue(h), isNew:true});
     made++;
   });
   saveSets();
@@ -1790,6 +2004,7 @@ function applyModeUI(){
   document.getElementById('refPlateBlock').classList.toggle('hidden', pl);
   document.getElementById('genStep').value = pl ? 5 : 8;
   document.getElementById('genCount').value = pl ? 7 : 8;
+  updateExportBtn();
 }
 
 function setMode(m){
