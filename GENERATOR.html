@@ -176,7 +176,6 @@
         <div style="margin-left:auto; display:flex; gap:8px;">
           <button id="retOpenBtn" onclick="openReturn()" style="background:#e5484d; border-color:#e5484d; color:#fff;">Открыть</button>
           <button id="retCancelBtn" class="hidden" onclick="cancelReturn()">Отменить</button>
-          <button id="retSaveBtn" class="hidden" onclick="saveReturn()" style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;">Сохранить</button>
         </div>
       </div>
     </div>
@@ -306,6 +305,27 @@
     <div id="reconBody"></div>
     <div class="btn-row" style="justify-content:flex-end;">
       <button onclick="document.getElementById('reconModal').classList.add('hidden')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div id="replaceModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="hint" id="replaceText" style="margin:0 0 16px; font-size:15px; color:var(--ink);"></div>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="answerReplace(false)">Нет</button>
+      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="answerReplace(true)">Да</button>
+    </div>
+  </div>
+</div>
+
+<div id="exportConflictModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="hint" id="exportConflictText" style="margin:0 0 16px; font-size:15px; color:var(--ink);"></div>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button onclick="answerExportConflict('cancel')">Отменить</button>
+      <button id="exportConflictNewBtn" onclick="answerExportConflict('new')"></button>
+      <button class="primary" onclick="answerExportConflict('replace')">Заменить</button>
     </div>
   </div>
 </div>
@@ -720,7 +740,7 @@ function renderTable(hue, maxVal, rows, sat, step){
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
-  document.getElementById('addBtn').disabled = !!returned;
+  document.getElementById('addBtn').disabled = !!returned && !returned.open;
 }
 
 function summaryLine(hue, maxVal, rows, sat, step, edited){
@@ -815,26 +835,86 @@ function copyText(text){
   }
   try{ fallbackCopy(text); return Promise.resolve(); }catch(e){ return Promise.reject(e); }
 }
-function sendToTest(){
+let replaceResolve = null;
+function askReplace(name){
+  return new Promise(res => {
+    replaceResolve = res;
+    document.getElementById('replaceText').textContent = 'Заменить ' + name + '?';
+    document.getElementById('replaceModal').classList.remove('hidden');
+  });
+}
+function answerReplace(ok){
+  document.getElementById('replaceModal').classList.add('hidden');
+  const r = replaceResolve; replaceResolve = null;
+  if(r) r(ok);
+}
+let exportConflictResolve = null;
+function nextQueueName(queue, kind, name){
+  let n = 1;
+  while(queue.some(q => q.kind === kind && String(q.name).toLowerCase() === (name + '_' + n).toLowerCase())) n++;
+  return name + '_' + n;
+}
+function askExportConflict(queue, kind, name){
+  return new Promise(res => {
+    exportConflictResolve = res;
+    document.getElementById('exportConflictText').textContent = 'В буфере уже есть семейство с таким именем: ' + name;
+    document.getElementById('exportConflictNewBtn').textContent = 'Добавить как ' + nextQueueName(queue, kind, name);
+    document.getElementById('exportConflictModal').classList.remove('hidden');
+  });
+}
+function answerExportConflict(a){
+  document.getElementById('exportConflictModal').classList.add('hidden');
+  const r = exportConflictResolve; exportConflictResolve = null;
+  if(r) r(a);
+}
+function famSig(f){ return JSON.stringify([f.hue, f.params, f.list]); }
+async function sendToTest(){
   if(hasUnsavedEdit()){
     showToast('Есть несохранённые изменения — нажмите OK или снимите галку.');
     return;
   }
   const chosen = sets.filter(s => s.selected);
   if(!chosen.length){ showToast('Ничего не отмечено.'); return; }
+  const kind = curKind();
+  const queue = getRecon().queue.slice();
+  const dups = [];
+  let changed = false;
+  for(const s of chosen){
+    const info = genFamInfo(s, kind);
+    const f = {kind, name: info.name, hue: info.hue, params: info.params, list: info.list};
+    const lc = f.name.toLowerCase();
+    const related = q => {
+      if(q.kind !== kind) return false;
+      const n = String(q.name).toLowerCase();
+      return n === lc || (n.startsWith(lc + '_') && /^\d+$/.test(n.slice(lc.length + 1)));
+    };
+    if(queue.some(q => related(q) && famSig(q) === famSig(f))){ dups.push(f.name); continue; }
+    const i = queue.findIndex(q => q.kind === kind && String(q.name).toLowerCase() === lc);
+    if(i === -1){ queue.push(f); changed = true; continue; }
+    const a = await askExportConflict(queue, kind, f.name);
+    if(a === 'replace'){ queue[i] = f; changed = true; }
+    else if(a === 'new'){ f.name = nextQueueName(queue, kind, f.name); queue.push(f); changed = true; }
+  }
+  if(!changed){
+    if(dups.length) showToast(dups.join(', ') + ' — уже добавлено');
+    afterDownloadSelected();
+    return;
+  }
+  const items = queue.filter(q => q.kind === kind);
   const payload = {
     type: 'obojm_to_test',
-    kind: mode === 'plates' ? 'bg' : 'text',
-    families: chosen.map(s => ({
-      name: (s.name ? s.name : fallbackName(s.hue)).trim(),
-      hue: Number(s.hue),
-      params: summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step),
-      list: s.rows.map(r => String(r.hex).replace('#','').toUpperCase() + ':' + r.L)
-    }))
+    kind: kind,
+    families: items.map(q => ({name: q.name, hue: q.hue, params: q.params, list: q.list}))
   };
-  copyText(JSON.stringify(payload))
-    .then(() => { showToast('Скопировано: ' + chosen.length); startRecon(); afterDownloadSelected(); })
-    .catch(() => showToast('Не удалось скопировать.'));
+  try{
+    await copyText(JSON.stringify(payload));
+  }catch(e){
+    showToast('Не удалось скопировать.');
+    return;
+  }
+  setRecon({pending: true, ignored: {}, queue});
+  showToast('Скопировано: ' + items.length + (dups.length ? ' · ' + dups.join(', ') + ' — уже добавлено' : ''));
+  afterDownloadSelected();
 }
 
 function changeSuffix(s){
@@ -851,9 +931,9 @@ let reconItems = [];
 function getRecon(){
   try{
     const r = JSON.parse(localStorage.getItem(RECON_KEY));
-    if(r && typeof r === 'object') return {pending: !!r.pending, ignored: r.ignored || {}};
+    if(r && typeof r === 'object') return {pending: !!r.pending, ignored: r.ignored || {}, queue: Array.isArray(r.queue) ? r.queue : []};
   }catch(e){}
-  return {pending: false, ignored: {}};
+  return {pending: false, ignored: {}, queue: []};
 }
 function setRecon(r){
   try{ localStorage.setItem(RECON_KEY, JSON.stringify(r)); }catch(e){}
@@ -864,18 +944,17 @@ function updateExportBtn(){
   if(!b) return;
   const p = getRecon().pending;
   const anySel = sets.some(x => x.selected);
-  b.innerHTML = p ? 'ЭКСПОРТ<span style="display:block;font-size:10px;font-weight:400;line-height:1.3;">сверка</span>' : (anySel ? 'ЭКСПОРТ' : 'CONNECT');
+  const n = getRecon().queue.length;
+  b.innerHTML = p ? 'ЭКСПОРТ<span style="display:block;font-size:10px;font-weight:400;line-height:1.3;">на сверке' + (n ? ': ' + n : '') + '</span>' : (anySel ? 'ЭКСПОРТ' : 'CONNECT');
   b.style.background = p ? 'hsl(48 100% 50%)' : '';
   b.style.borderColor = p ? 'hsl(48 100% 50%)' : '';
   b.style.color = p ? 'hsl(0 0% 10%)' : '';
 }
 function onExportBtn(){
-  if(getRecon().pending){ reconTap(); return; }
   if(sets.some(x => x.selected)) sendToTest(); else reconTap();
 }
-function startRecon(){ setRecon({pending: true, ignored: {}}); }
 function closeRecon(msg){
-  setRecon({pending: false, ignored: {}});
+  setRecon({pending: false, ignored: {}, queue: []});
   document.getElementById('reconModal').classList.add('hidden');
   if(msg) showToast(msg);
 }
@@ -996,7 +1075,7 @@ function processReconText(text){
   const ign = {};
   r.items.forEach(it => { if(rec.ignored[it.key] === it.sig) ign[it.key] = it.sig; });
   reconItems = r.items;
-  setRecon({pending: rec.pending, ignored: ign});
+  setRecon({pending: rec.pending, ignored: ign, queue: rec.queue});
   if(reconUnresolved() === 0){ closeRecon('Расхождений нет.'); return; }
   renderRecon();
   document.getElementById('reconModal').classList.remove('hidden');
@@ -1077,6 +1156,7 @@ function insertSetSorted(newSet){
 }
 
 function addSet(){
+  if(returned){ addReturned(); return; }
   if(!lastRows) return;
   const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat);
   if(sets.some(s => s.sig === sig)){
@@ -1510,13 +1590,12 @@ function lockFirstScreen(flag){
   if(returned) returned.locked = flag;
 }
 function blockWhileReturned(){
-  ['addBtn','showBtn','modeFonts','modePlates'].forEach(id => { document.getElementById(id).disabled = true; });
+  ['showBtn','modeFonts','modePlates'].forEach(id => { document.getElementById(id).disabled = true; });
   document.querySelectorAll('#massBlock button, #massBlock input').forEach(el => { el.disabled = true; });
 }
 function setReturnRowState(open){
   document.getElementById('retOpenBtn').classList.toggle('hidden', open);
   document.getElementById('retCancelBtn').classList.toggle('hidden', !open);
-  document.getElementById('retSaveBtn').classList.toggle('hidden', !open);
 }
 
 function returnToFirst(id){
@@ -1577,25 +1656,30 @@ function exitReturn(){
   document.getElementById('returnRow').classList.add('hidden');
 }
 
-function saveReturn(){
+function addReturned(){
   if(!returned || !returned.open) return;
   if(returned.dirty){ showToast('Сначала нажмите «Построить».'); return; }
   const s = sets.find(x => x.id === returned.id);
   if(!s || !lastRows) return;
   if(lastHue === s.hue && lastMaxVal === s.maxVal && lastSat === s.sat && rowsEqual(lastRows, s.rows)){
-    showToast('Изменений нет.');
+    showToast('Замены нет.');
+    document.getElementById('addBtn').disabled = true;
     return;
   }
-  document.getElementById('saveChoiceModal').classList.remove('hidden');
+  const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat);
+  if(sets.some(x => x !== s && x.sig === sig)){
+    showToast('Такой ряд уже есть.');
+    return;
+  }
+  askReplace(s.name ? s.name : fallbackName(s.hue)).then(ok => commitReturn(ok ? 'replace' : 'new'));
 }
 
 function commitReturn(m){
   const s = returned && sets.find(x => x.id === returned.id);
-  if(!s){ closeSaveChoice(); return; }
+  if(!s) return;
   const rows = lastRows.map(r => ({...r}));
   const sig = computeSignature(lastHue, lastMaxVal, rows, lastSat);
-  if(sets.some(x => x !== s && x.sig === sig) || (m === 'new' && s.sig === sig)){
-    closeSaveChoice();
+  if(sets.some(x => x !== s && x.sig === sig)){
     showToast('Такой ряд уже есть.');
     return;
   }
@@ -1613,11 +1697,10 @@ function commitReturn(m){
   } else {
     insertSetSorted({...base, id: nextId++, editTag: 'Добавлен здесь', isNew: true});
   }
-  closeSaveChoice();
   saveSets();
   renderSets();
   exitReturn();
-  showToast(m === 'replace' ? 'Заменено.' : 'Добавлено как новый.');
+  showToast(m === 'replace' ? 'Заменено.' : 'Добавлено.');
 }
 
 document.getElementById('selectScreen').addEventListener('input', e => {
