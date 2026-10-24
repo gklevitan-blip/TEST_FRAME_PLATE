@@ -345,7 +345,7 @@
     border: 1px solid rgba(255,255,255,0.2);
     border-radius: 10px;
     padding: 10px;
-    width: 230px;
+    width: 232px;
     z-index: 30;
   }
   .fs-panel.open {
@@ -499,6 +499,27 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #fgSwatches .mini, #bgSwatches .mini, #fgFsSwatches .mini, #bgFsSwatches .mini { border: 1px solid #8a8a8a; background-clip: padding-box; }
+  .fs-panel .swatch-row { width: 210px; }
+  .fs-sw-wrap { position: relative; width: 210px; min-height: 78px; margin-top: 10px; }
+  .fs-sw-wrap .swatch-row { margin-top: 0; }
+  .op-combo { position: relative; display: inline-flex; align-items: stretch; width: 122px; height: 34px; flex-shrink: 0;
+    border: 1px solid #8a8a8a; border-radius: 8px; background-clip: padding-box; }
+  .op-combo-fs { position: absolute; right: 0; bottom: 0; }
+  .op-val { width: 60px; flex: none; display: flex; align-items: center; justify-content: center; padding: 0 2px;
+    background: var(--panel-bg); border-radius: 7px 0 0 7px; }
+  .op-val input { width: 30px; height: 100%; background: transparent; border: 0; outline: none; color: var(--ink);
+    font-size: 15px; text-align: right; padding: 0; font-variant-numeric: tabular-nums; opacity: 0.45; pointer-events: none; }
+  .op-combo.active .op-val input { opacity: 1; pointer-events: auto; }
+  .op-val .op-pct { font-size: 14px; color: var(--ink-dim); margin-left: 2px; }
+  .op-arrow { width: 60px; flex: none; background: #858585; border: 0; border-left: 1px solid #8a8a8a; border-radius: 0 7px 7px 0;
+    cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .op-arrow i { display: block; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6.5px solid #000; }
+  .op-list { display: none; position: absolute; top: 100%; right: 0; left: 0; margin-top: 4px;
+    background: #1b1b1b; border: 1px solid #8a8a8a; border-radius: 8px; overflow: hidden; z-index: 60; }
+  .op-list.open { display: block; }
+  .op-list div { padding: 9px 12px; font-size: 15px; color: var(--ink); text-align: center; cursor: pointer; }
+  .op-list div:active { background: rgba(255,255,255,0.12); }
   .chg-banner { background: #c62828; color: #fff; font-size: 11px; line-height: 1.3; padding: 6px 8px; border-radius: 6px; margin-bottom: 12px; display: none; }
   .fam-mark { margin-left: 10px; font-size: 13px; font-weight: 600; color: #ff8a8a; }
 </style>
@@ -550,7 +571,10 @@
             <div class="fs-label halo-text">Плашка</div>
             <div class="fs-panel" id="bgFsPanel">
               <select id="bgFsSelect"></select>
-              <div class="swatch-row" id="bgFsSwatches"></div>
+              <div class="fs-sw-wrap">
+                <div class="swatch-row" id="bgFsSwatches"></div>
+                <div class="op-combo op-combo-fs"></div>
+              </div>
               <div class="rainbow-wrap" id="bgFsCustomWrap" style="display:none;"><input type="color" id="bgCustomColorFS"></div>
             </div>
           </div>
@@ -577,6 +601,10 @@
           <div style="display:flex; align-items:center; gap:10px; margin-top:26px;">
             <div class="rainbow-wrap"><input type="color" id="bgCustomColor"></div>
             <span style="font-size:12px; color:var(--ink-dim);">или RGB</span>
+            <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+              <span style="font-size:12px; color:var(--ink-dim); white-space:nowrap; flex-shrink:0;">Прозрачность</span>
+              <div class="op-combo"></div>
+            </div>
           </div>
         </div>
 
@@ -586,14 +614,13 @@
 
         <div class="control-block full-width">
           <details class="settings-panel" id="settingsPanel">
-            <summary>⚙ Настройки: размер, положение, прозрачность</summary>
+            <summary>⚙ Настройки: размер, положение</summary>
             <div class="settings-grid" style="margin-top:14px;">
               <div class="settings-col">
                 <div class="settings-subhead">Размер</div>
                 <div class="num-field"><label>Шрифт Title, px</label><input type="number" id="titleFontSizeNum" min="10" max="300" step="1"></div>
                 <div class="num-field"><label>Шрифт Subtitle, px</label><input type="number" id="subtitleFontSizeNum" min="10" max="300" step="1"></div>
                 <div class="num-field"><label>Отступ плашки, %</label><input type="number" id="plashkaPadNum" min="0" max="400" step="1"></div>
-                <div class="num-field"><label>Прозрачность плашки, %</label><input type="number" id="plashkaOpacityNum" min="0" max="100" step="1"></div>
               </div>
               <div class="settings-col">
                 <div class="settings-subhead">Положение плашки, %</div>
@@ -927,6 +954,11 @@ function populateSelect(sel, obj, onChange){
 }
 function populateFsSelect(sel, obj, onFamily, onCustom){
   sel.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = "";
+  ph.textContent = "Выбрать…";
+  ph.disabled = true;
+  sel.appendChild(ph);
   namesAlpha(obj).forEach(name => {
     const opt = document.createElement("option");
     opt.value = name;
@@ -1001,6 +1033,7 @@ function setFgFamily(name){
 function setBgCustom(hex){
   const f = activeFrame();
   f.bgCustomHex = hex.toUpperCase();
+  f.bgCustomSet = true;
   document.getElementById("bgCustomColor").value = f.bgCustomHex;
   document.getElementById("bgCustomColorFS").value = f.bgCustomHex;
   syncBgUI(); updateStage(); saveState();
@@ -1008,6 +1041,7 @@ function setBgCustom(hex){
 function setFgCustom(hex){
   const f = activeFrame();
   f.fgCustomHex = hex.toUpperCase();
+  f.fgCustomSet = true;
   document.getElementById("fgCustomColor").value = f.fgCustomHex;
   document.getElementById("fgCustomColorFS").value = f.fgCustomHex;
   syncFgUI(); updateStage(); saveState();
@@ -1034,15 +1068,17 @@ function refreshFgFsSwatches(){
   renderSwatchRow(document.getElementById("fgFsSwatches"), f.fgFamily, DATA.text, idx, pickFgSwatch);
 }
 
+function bgCustomShown(f){ return !!f.bgCustomHex && (f.bgCustomSet || f.bgCustomHex.toUpperCase() !== "#000000"); }
+function fgCustomShown(f){ return !!f.fgCustomHex && (f.fgCustomSet || f.fgCustomHex.toUpperCase() !== "#FFFFFF"); }
 function syncBgUI(){
   const f = activeFrame();
   const bgSelEl = document.getElementById("bgFamilySelect");
   const bgFsSelEl = document.getElementById("bgFsSelect");
   if (bgSelEl) bgSelEl.value = f.bgFamily || "";
-  if (bgFsSelEl) bgFsSelEl.value = f.bgCustomHex ? "__custom__" : (f.bgFamily || "__custom__");
+  if (bgFsSelEl) bgFsSelEl.value = bgCustomShown(f) ? "__custom__" : (f.bgFamily || "");
   refreshBgSwatches();
   refreshBgFsSwatches();
-  document.getElementById("bgFsCustomWrap").style.display = f.bgCustomHex ? "block" : "none";
+  document.getElementById("bgFsCustomWrap").style.display = bgCustomShown(f) ? "block" : "none";
   document.getElementById("bgFsRect").style.background = currentBgHex();
   document.getElementById("bgCustomColor").value = currentBgHex();
   document.getElementById("bgCustomColorFS").value = currentBgHex();
@@ -1052,10 +1088,10 @@ function syncFgUI(){
   const fgSelEl = document.getElementById("fgFamilySelect");
   const fgFsSelEl = document.getElementById("fgFsSelect");
   if (fgSelEl) fgSelEl.value = f.fgFamily || "";
-  if (fgFsSelEl) fgFsSelEl.value = f.fgCustomHex ? "__custom__" : (f.fgFamily || "__custom__");
+  if (fgFsSelEl) fgFsSelEl.value = fgCustomShown(f) ? "__custom__" : (f.fgFamily || "");
   refreshFgSwatches();
   refreshFgFsSwatches();
-  document.getElementById("fgFsCustomWrap").style.display = f.fgCustomHex ? "block" : "none";
+  document.getElementById("fgFsCustomWrap").style.display = fgCustomShown(f) ? "block" : "none";
   document.getElementById("fgFsRect").style.background = currentFgHex();
   document.getElementById("fgCustomColor").value = currentFgHex();
   document.getElementById("fgCustomColorFS").value = currentFgHex();
@@ -1189,7 +1225,7 @@ function updateStage(){
   document.getElementById("titleFontSizeNum").value = f.titleFontScale;
   document.getElementById("subtitleFontSizeNum").value = f.subtitleFontScale;
   document.getElementById("plashkaPadNum").value = f.plashkaScale;
-  document.getElementById("plashkaOpacityNum").value = f.plashkaOpacity;
+  syncOpacityUI();
   document.getElementById("plashkaPosXNum").value = f.plashkaPosX;
   document.getElementById("plashkaPosYNum").value = f.plashkaPosY;
 
@@ -1218,7 +1254,61 @@ function bindNumberInput(id, key, onAfter){
 bindNumberInput("titleFontSizeNum", "titleFontScale", applySizes);
 bindNumberInput("subtitleFontSizeNum", "subtitleFontScale", applySizes);
 bindNumberInput("plashkaPadNum", "plashkaScale", applySizes);
-bindNumberInput("plashkaOpacityNum", "plashkaOpacity", applyPlashkaColor);
+var opCombos = [];
+function syncOpacityUI(skip){
+  if (!opCombos.length) return;
+  const v = activeFrame().plashkaOpacity;
+  opCombos.forEach(c => { if (c.input !== skip) c.input.value = v; });
+}
+function setPlashkaOpacity(v, skip){
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  activeFrame().plashkaOpacity = v;
+  updateLastSizing();
+  applyPlashkaColor();
+  saveState();
+  syncOpacityUI(skip);
+}
+function setOpActive(c, on){
+  c.input.readOnly = !on;
+  c.box.classList.toggle("active", on);
+}
+function closeOpLists(){
+  opCombos.forEach(c => { c.list.classList.remove("open"); setOpActive(c, false); c.input.blur(); });
+}
+document.querySelectorAll(".op-combo").forEach(box => {
+  const val = document.createElement("div"); val.className = "op-val";
+  const input = document.createElement("input");
+  input.type = "text"; input.inputMode = "numeric"; input.maxLength = 3; input.readOnly = true;
+  const pct = document.createElement("span"); pct.className = "op-pct"; pct.textContent = "%";
+  val.append(input, pct);
+  const arrow = document.createElement("button"); arrow.type = "button"; arrow.className = "op-arrow";
+  arrow.appendChild(document.createElement("i"));
+  const list = document.createElement("div"); list.className = "op-list";
+  const c = { box, input, list };
+  [60,70,80,90,100].forEach(n => {
+    const it = document.createElement("div"); it.textContent = n + "%";
+    it.addEventListener("click", () => { setPlashkaOpacity(n); closeOpLists(); });
+    list.appendChild(it);
+  });
+  box.append(val, arrow, list);
+  input.addEventListener("input", () => {
+    const v = parseFloat(input.value.replace(",", "."));
+    if (!isNaN(v)) setPlashkaOpacity(v, input);
+  });
+  input.addEventListener("change", () => syncOpacityUI());
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { syncOpacityUI(); closeOpLists(); } });
+  arrow.addEventListener("click", () => {
+    const willOpen = !list.classList.contains("open");
+    closeOpLists();
+    if (willOpen) { list.classList.add("open"); setOpActive(c, true); }
+  });
+  opCombos.push(c);
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest || !e.target.closest(".op-combo")) closeOpLists();
+}, true);
+syncOpacityUI();
 bindNumberInput("plashkaPosXNum", "plashkaPosX", applySizes);
 bindNumberInput("plashkaPosYNum", "plashkaPosY", applySizes);
 
