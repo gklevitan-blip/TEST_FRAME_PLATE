@@ -614,13 +614,14 @@
 
         <div class="control-block full-width">
           <details class="settings-panel" id="settingsPanel">
-            <summary>⚙ Настройки: размер, положение</summary>
+            <summary>⚙ Настройки: размер, положение, прозрачность</summary>
             <div class="settings-grid" style="margin-top:14px;">
               <div class="settings-col">
                 <div class="settings-subhead">Размер</div>
                 <div class="num-field"><label>Шрифт Title, px</label><input type="number" id="titleFontSizeNum" min="10" max="300" step="1"></div>
                 <div class="num-field"><label>Шрифт Subtitle, px</label><input type="number" id="subtitleFontSizeNum" min="10" max="300" step="1"></div>
                 <div class="num-field"><label>Отступ плашки, %</label><input type="number" id="plashkaPadNum" min="0" max="400" step="1"></div>
+                <div class="num-field"><label>Прозрачность плашки, %</label><input type="number" id="plashkaOpacityNum" min="0" max="100" step="1"></div>
               </div>
               <div class="settings-col">
                 <div class="settings-subhead">Положение плашки, %</div>
@@ -1259,6 +1260,8 @@ function syncOpacityUI(skip){
   if (!opCombos.length) return;
   const v = activeFrame().plashkaOpacity;
   opCombos.forEach(c => { if (c.input !== skip) c.input.value = v; });
+  const numEl = document.getElementById("plashkaOpacityNum");
+  if (numEl && numEl !== skip) numEl.value = v;
 }
 function setPlashkaOpacity(v, skip){
   v = Math.max(0, Math.min(100, Math.round(v)));
@@ -1308,6 +1311,14 @@ document.querySelectorAll(".op-combo").forEach(box => {
 document.addEventListener("click", (e) => {
   if (!e.target.closest || !e.target.closest(".op-combo")) closeOpLists();
 }, true);
+(function(){
+  const numEl = document.getElementById("plashkaOpacityNum");
+  numEl.addEventListener("input", () => {
+    const v = parseFloat(numEl.value);
+    if (!isNaN(v)) setPlashkaOpacity(v, numEl);
+  });
+  numEl.addEventListener("change", () => syncOpacityUI());
+})();
 syncOpacityUI();
 bindNumberInput("plashkaPosXNum", "plashkaPosX", applySizes);
 bindNumberInput("plashkaPosYNum", "plashkaPosY", applySizes);
