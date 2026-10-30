@@ -47,6 +47,21 @@
     background-color: #3a3a3a;
     margin: 0 auto;
   }
+  .title-counter {
+    width: 34px;
+    height: 34px;
+    box-sizing: border-box;
+    border: 1px solid #8a8a8a;
+    border-radius: 8px;
+    background: var(--panel-bg);
+    color: var(--ink);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
   .plashka {
     position: absolute;
     border-radius: 6px;
@@ -59,6 +74,11 @@
     outline: none;
     text-align: left;
     white-space: nowrap;
+  }
+  .stage-title {
+    min-width: 2px;
+    min-height: 1.25em;
+    cursor: text;
   }
   .stage-title:focus {
     box-shadow: 0 0 0 2px rgba(255,255,255,0.25);
@@ -580,7 +600,8 @@
           </div>
         </div>
       </div>
-      <div style="text-align:right; margin-top:10px;">
+      <div id="stageBar" style="display:flex; align-items:center; justify-content:space-between; margin:10px auto 0;">
+        <div class="title-counter" id="titleCounter">0</div>
         <button id="openFullscreenBtn" class="btn">⤢ Во весь экран</button>
       </div>
 
@@ -1207,6 +1228,7 @@ function sizeStageToImage(dataURL){
     if (height > maxH) { height = maxH; width = height * img.naturalWidth / img.naturalHeight; }
     stage.style.width = Math.round(width) + "px";
     stage.style.height = Math.round(height) + "px";
+    document.getElementById("stageBar").style.width = Math.round(width) + "px";
     applySizes();
   };
   img.src = dataURL;
@@ -1220,6 +1242,7 @@ function updateStage(){
   applyPlashkaColor();
   document.getElementById("stageTitle").style.color = currentFgHex();
   document.getElementById("stageTitle").textContent = f.titleText;
+  updateTitleCounter();
   document.getElementById("plashkaEnabledCheck").checked = f.plashkaEnabled;
 
   const fgLine = fgLabel();
@@ -1338,9 +1361,24 @@ document.getElementById("plashkaEnabledCheck").addEventListener("change", (e) =>
   updateStage();
   saveState();
 });
+function updateTitleCounter(){
+  const t = document.getElementById("stageTitle").textContent;
+  document.getElementById("titleCounter").textContent = Array.from(t).length;
+}
 document.getElementById("stageTitle").addEventListener("input", (e) => {
+  if (e.target.textContent === "" && e.target.innerHTML !== "") e.target.innerHTML = "";
   activeFrame().titleText = e.target.textContent;
+  updateTitleCounter();
   saveState();
+});
+document.getElementById("plashka").addEventListener("mousedown", (e) => {
+  const title = document.getElementById("stageTitle");
+  if (e.target === title || title.contains(e.target)) return;
+  e.preventDefault();
+  title.focus();
+  const r = document.createRange();
+  r.selectNodeContents(title); r.collapse(false);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
 });
 
 document.getElementById("openFullscreenBtn").addEventListener("click", () => {
