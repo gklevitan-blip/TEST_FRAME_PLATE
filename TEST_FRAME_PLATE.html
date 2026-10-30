@@ -2412,11 +2412,6 @@ function chosenFams(){
   namesByHue(DATA.bg).forEach(n => { if (selectedFams.has(famKey("bg", n))) out.push({ kind: "bg", name: n, fam: DATA.bg[n] }); });
   return out;
 }
-function zipNameFor(chosen){
-  const hasFg = chosen.some(c => c.kind === "fg");
-  const hasBg = chosen.some(c => c.kind === "bg");
-  return hasFg && hasBg ? "HUE_Font_Plate.zip" : (hasBg ? "HUE_Plate.zip" : "HUE_Font.zip");
-}
 function afterDownloadSelected(){
   selectedFams.clear();
   syncFamChecks();
@@ -2459,41 +2454,55 @@ function downloadSelectedTxt(){
     return;
   }
 
-  // Тип, где семейств больше одного — папка; где одно — файл в корне архива.
-  const zip = new JSZip();
-  const folders = {
-    fg: nFg > 1 ? zip.folder("HUE_FONTS") : null,
-    bg: nBg > 1 ? zip.folder("HUE_Plates") : null
-  };
-  const usedNames = {};
-  chosen.forEach(c => {
-    if (!folders[c.kind]){
-      zip.file(exportBaseName(c) + ".txt", famToText(c.fam));
+  // Тип, где семейств больше одного — отдельный архив БЕЗ вложенной папки:
+  // txt лежат прямо в корне, имя архива = имя будущей папки (HUE_FONTS / HUE_Plates).
+  // Тип, где семейство одно — обычный txt.
+  const jobs = [];
+  [["fg", "HUE_FONTS", nFg], ["bg", "HUE_Plates", nBg]].forEach(([kind, folderName, n]) => {
+    if (!n) return;
+    const items = chosen.filter(c => c.kind === kind);
+    if (n === 1){
+      jobs.push({ type: "txt", name: exportBaseName(items[0]) + ".txt", text: famToText(items[0].fam) });
       return;
     }
-    let base = safeFileName(c.name || "") || String(c.fam.hue !== null ? c.fam.hue : "neutral");
-    let name = base + ".txt";
-    const uKey = c.kind + "|" + name;
-    if (usedNames[uKey] !== undefined){
-      usedNames[uKey]++;
-      name = base + "_" + usedNames[uKey] + ".txt";
-    } else {
-      usedNames[uKey] = 0;
-    }
-    folders[c.kind].file(name, famToText(c.fam));
+    const zip = new JSZip();
+    const usedNames = {};
+    items.forEach(c => {
+      const base = safeFileName(c.name || "") || String(c.fam.hue !== null ? c.fam.hue : "neutral");
+      let name = base + ".txt";
+      if (usedNames[base] !== undefined){
+        usedNames[base]++;
+        name = base + "_" + usedNames[base] + ".txt";
+      } else {
+        usedNames[base] = 0;
+      }
+      zip.file(name, famToText(c.fam));
+    });
+    jobs.push({ type: "zip", name: folderName + ".zip", zip });
   });
 
-  zip.generateAsync({ type: "blob" }).then(blob => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = zipNameFor(chosen);
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    afterDownloadSelected();
-  }).catch(e => {
-    console.error("Не удалось создать zip:", e);
-    showToast("Ошибка при создании архива.");
-  });
+  (async () => {
+    try {
+      for (let i = 0; i < jobs.length; i++){
+        const j = jobs[i];
+        if (j.type === "txt"){
+          triggerDownload(j.name, j.text);
+        } else {
+          const blob = await j.zip.generateAsync({ type: "blob" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = j.name;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+        }
+        if (i < jobs.length - 1) await new Promise(r => setTimeout(r, 400));
+      }
+      afterDownloadSelected();
+    } catch (e){
+      console.error("Не удалось создать zip:", e);
+      showToast("Ошибка при создании архива.");
+    }
+  })();
 }
 
 /* ---------- выделения не запоминаются: сбрасываются любым другим действием и при закрытии ---------- */

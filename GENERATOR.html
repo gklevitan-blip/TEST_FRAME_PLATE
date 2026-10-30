@@ -394,7 +394,7 @@ function onStartLBlur(el){
   if(!validStartL(parseFloat(el.value))) showToast(startLMsg());
 }
 function fallbackName(hue){ return mode === 'plates' ? `Plate_${hue}` : `FONT_${hue}`; }
-function zipName(){ return mode === 'plates' ? 'HUE_Plate.zip' : 'HUE_Font.zip'; }
+function zipName(){ return mode === 'plates' ? 'HUE_Plates.zip' : 'HUE_FONTS.zip'; }
 let lastRows = null;
 let lastRowsOriginal = null;
 let lastHue = null;
