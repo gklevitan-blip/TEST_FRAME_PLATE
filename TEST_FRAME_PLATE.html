@@ -371,6 +371,10 @@
   .fs-panel.open {
     display: block;
   }
+  .fs-panel.picking {
+    opacity: 0;
+    pointer-events: none;
+  }
   .fs-panel select {
     width: 100%;
     background: var(--panel-bg);
@@ -1840,6 +1844,26 @@ document.getElementById("bgCustomColor").addEventListener("input", (e) => setBgC
 document.getElementById("bgCustomColorFS").addEventListener("input", (e) => setBgCustom(e.target.value));
 document.getElementById("fgCustomColor").addEventListener("input", (e) => setFgCustom(e.target.value));
 document.getElementById("fgCustomColorFS").addEventListener("input", (e) => setFgCustom(e.target.value));
+
+/* ---------- hide FS panel while the native colour picker (eyedropper) is open ---------- */
+(function(){
+  let armedAt = 0;
+  function restore(){
+    if (Date.now() - armedAt < 300) return;
+    document.getElementById("bgFsPanel").classList.remove("picking");
+    document.getElementById("fgFsPanel").classList.remove("picking");
+  }
+  ["bgCustomColorFS", "fgCustomColorFS"].forEach((id) => {
+    const inp = document.getElementById(id);
+    inp.addEventListener("click", () => {
+      armedAt = Date.now();
+      inp.closest(".fs-panel").classList.add("picking");
+    });
+    inp.addEventListener("change", () => { armedAt = 0; restore(); });
+  });
+  document.addEventListener("pointerdown", restore, true);
+  document.addEventListener("keydown", restore, true);
+})();
 
 function toggleFsPanel(panelId, otherPanelId){
   const panel = document.getElementById(panelId);
