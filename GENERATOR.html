@@ -319,6 +319,32 @@
   </div>
 </div>
 
+<div id="dupNameModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="hint" id="dupNameText" style="margin:0 0 16px; font-size:15px; color:var(--ink);"></div>
+    <div class="btn-row" id="dupNameAsk" style="justify-content:space-between;">
+      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="answerDupName(false)">Нет</button>
+      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="answerDupName(true)">Да</button>
+    </div>
+    <div class="btn-row hidden" id="dupNameInputRow" style="justify-content:space-between; gap:8px;">
+      <input type="text" id="dupNameInput" style="flex:1; min-width:0;" onkeydown="if(event.key==='Enter') finishDupName()">
+      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="finishDupName()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="renameModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="btn-row" style="justify-content:space-between; gap:8px; margin-bottom:12px;">
+      <input type="text" id="renameInput" style="flex:1; min-width:0;" onkeydown="if(event.key==='Enter') finishRename(); else if(event.key==='Escape') closeRename()">
+    </div>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button onclick="closeRename()">Отмена</button>
+      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="finishRename()">OK</button>
+    </div>
+  </div>
+</div>
+
 <div id="exportConflictModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:380px;">
     <div class="hint" id="exportConflictText" style="margin:0 0 16px; font-size:15px; color:var(--ink);"></div>
@@ -835,6 +861,83 @@ function copyText(text){
   }
   try{ fallbackCopy(text); return Promise.resolve(); }catch(e){ return Promise.reject(e); }
 }
+/* ---------- Одинаковые имена на втором экране ---------- */
+function setEffName(s){ return (s.name ? s.name : fallbackName(s.hue)).trim(); }
+function nameTaken(n){ const l = n.toLowerCase(); return sets.some(x => setEffName(x).toLowerCase() === l); }
+function uniqueName(base){ let n = 1; while(nameTaken(base + '_' + n)) n++; return base + '_' + n; }
+function baseNameOf(s){
+  const nm = s.name || '';
+  return s.nameTail && nm.endsWith(s.nameTail) ? nm.slice(0, nm.length - s.nameTail.length) : nm;
+}
+let dupNameResolve = null;
+function askDupName(){
+  return new Promise(res => {
+    dupNameResolve = res;
+    document.getElementById('dupNameText').textContent = 'Такое семейство уже есть, добавить особое определение к имени?';
+    document.getElementById('dupNameAsk').classList.remove('hidden');
+    document.getElementById('dupNameInputRow').classList.add('hidden');
+    document.getElementById('dupNameInput').value = '';
+    document.getElementById('dupNameModal').classList.remove('hidden');
+  });
+}
+function closeDupName(v){
+  document.getElementById('dupNameModal').classList.add('hidden');
+  const r = dupNameResolve; dupNameResolve = null;
+  if(r) r(v);
+}
+function answerDupName(yes){
+  if(!yes){ closeDupName(null); return; }
+  document.getElementById('dupNameText').textContent = 'Определение к имени:';
+  document.getElementById('dupNameAsk').classList.add('hidden');
+  document.getElementById('dupNameInputRow').classList.remove('hidden');
+  document.getElementById('dupNameInput').focus();
+}
+function finishDupName(){
+  const v = document.getElementById('dupNameInput').value.replace(/[\\\/:*?"<>|]/g, '').trim();
+  closeDupName(v || null);
+}
+// Возвращает итоговое имя; хвост = итог минус baseEff (то, что добавлено к имени).
+async function resolveDupName(baseEff){
+  if(!nameTaken(baseEff)) return baseEff;
+  const suf = await askDupName();
+  if(suf){
+    const cand = baseEff + '_' + suf;
+    return nameTaken(cand) ? uniqueName(cand) : cand;
+  }
+  return uniqueName(baseEff);
+}
+/* ---------- Смена имени семейства ---------- */
+let renameId = null;
+function openRename(id){
+  const s = sets.find(x => x.id === id);
+  if(!s) return;
+  renameId = id;
+  const inp = document.getElementById('renameInput');
+  inp.value = setEffName(s);
+  document.getElementById('renameModal').classList.remove('hidden');
+  inp.focus(); inp.select();
+}
+function closeRename(){
+  document.getElementById('renameModal').classList.add('hidden');
+  renameId = null;
+}
+function finishRename(){
+  const s = sets.find(x => x.id === renameId);
+  if(!s){ closeRename(); return; }
+  const v = document.getElementById('renameInput').value.replace(/[\\\/:*?"<>|]/g, '').trim();
+  if(!v || v === setEffName(s)){ closeRename(); return; }
+  const l = v.toLowerCase();
+  if(sets.some(x => x !== s && setEffName(x).toLowerCase() === l)){
+    showToast('Такое имя уже есть.');
+    return;
+  }
+  s.name = v;
+  s.nameTail = undefined;
+  s.nameManual = true;
+  closeRename();
+  saveSets();
+  renderSets();
+}
 let replaceResolve = null;
 function askReplace(name){
   return new Promise(res => {
@@ -1155,7 +1258,7 @@ function insertSetSorted(newSet){
   sets.splice(idx, 0, newSet);
 }
 
-function addSet(){
+async function addSet(){
   if(returned){ addReturned(); return; }
   if(!lastRows) return;
   const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat);
@@ -1163,7 +1266,12 @@ function addSet(){
     showToast('Уже добавлено.');
     return;
   }
-  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: getNameForHue(lastHue), isNew:true});
+  const nm0 = getNameForHue(lastHue);
+  const eff = (nm0 || fallbackName(lastHue)).trim();
+  const fin = await resolveDupName(eff);
+  const tail = fin.slice(eff.length);
+  if(sets.some(s => s.sig === sig)) return;
+  insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: tail ? fin : nm0, nameTail: tail || undefined, isNew:true});
   saveSets();
   renderSets();
   showResults();
@@ -1327,14 +1435,15 @@ function saveEdits(){
 function closeSaveChoice(){
   document.getElementById('saveChoiceModal').classList.add('hidden');
 }
-function commitEdit(mode){
-  if(returned){ commitReturn(mode); return; }
+async function commitEdit(mode){
+  if(returned){ return commitReturn(mode); }
   if(!editSession) { closeSaveChoice(); return; }
   const s = sets.find(x => x.id === editSession.id);
   if(!s){ closeSaveChoice(); return; }
   const orig = editSession;
   const flagStart = s.rows[0].L !== orig.rows[0].L;
   const flagEnd = s.rows[s.rows.length-1].L !== orig.rows[orig.rows.length-1].L;
+  let newTail = '', newName = s.name;
 
   if(mode === 'replace'){
     s.editedStartC = flagStart;
@@ -1349,6 +1458,11 @@ function commitEdit(mode){
       showToast('Такой ряд уже есть.');
       return;
     }
+    closeSaveChoice();
+    const baseEff = (baseNameOf(s) || fallbackName(s.hue)).trim();
+    const fin = await resolveDupName(baseEff);
+    newTail = fin.slice(baseEff.length);
+    newName = newTail ? fin : baseNameOf(s);
     const editedRows = s.rows, editedStep = s.step;
     // оригинал возвращаем как был
     s.rows = orig.rows.map(r => ({...r}));
@@ -1358,7 +1472,7 @@ function commitEdit(mode){
     s.selected = false;
     insertSetSorted({
       id: nextId++, hue: s.hue, maxVal: s.maxVal, sat: s.sat, step: editedStep,
-      rows: editedRows, selected: false, sig: newSig, name: s.name,
+      rows: editedRows, selected: false, sig: newSig, name: newName, nameTail: newTail || undefined,
       editedStartC: flagStart, editedEndC: flagEnd, editTag: 'Добавлен здесь', isNew: true
     });
   }
@@ -1459,6 +1573,7 @@ function renderSets(){
         <div class="set-header">
           <input type="checkbox" ${s.selected?'checked':''} onchange="toggleSelect(${s.id}, this.checked)">
           <span class="set-header-text" id="header-${s.id}">${header}</span>
+          <button class="del-x" style="font-size:22px;" onclick="openRename(${s.id})" title="Поменять имя">✎</button>
           <button class="del-x" onclick="deleteOne(${s.id})" title="Удалить эту полоску">✕</button>
         </div>
         <div class="strip" id="strip-${s.id}" onclick="toggleDetail(${s.id})">${strip}</div>
@@ -1674,7 +1789,7 @@ function addReturned(){
   askReplace(s.name ? s.name : fallbackName(s.hue)).then(ok => commitReturn(ok ? 'replace' : 'new'));
 }
 
-function commitReturn(m){
+async function commitReturn(m){
   const s = returned && sets.find(x => x.id === returned.id);
   if(!s) return;
   const rows = lastRows.map(r => ({...r}));
@@ -1686,10 +1801,20 @@ function commitReturn(m){
   const wasP = s.isNew ? undefined : (s.wasParams || summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step));
   const flagStart = rows[0].L !== s.rows[0].L;
   const flagEnd = rows[rows.length-1].L !== s.rows[s.rows.length-1].L;
-  const name = lastHue !== s.hue ? getNameForHue(lastHue) : s.name;
+  let name = lastHue !== s.hue ? getNameForHue(lastHue) : s.name;
+  let nameTail = lastHue !== s.hue ? undefined : s.nameTail;
+  if(m !== 'replace'){
+    const b0 = lastHue !== s.hue ? getNameForHue(lastHue) : baseNameOf(s);
+    const baseEff = (b0 || fallbackName(lastHue)).trim();
+    const fin = await resolveDupName(baseEff);
+    const tail = fin.slice(baseEff.length);
+    name = tail ? fin : b0;
+    nameTail = tail || undefined;
+    if(!returned || !sets.includes(s)) return;
+  }
   const base = {
     hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows, selected: false,
-    sig, name, editedStartC: flagStart, editedEndC: flagEnd
+    sig, name, nameTail, editedStartC: flagStart, editedEndC: flagEnd
   };
   if(m === 'replace'){
     sets = sets.filter(x => x !== s);
@@ -1931,7 +2056,11 @@ function createForAllHues(){
     if(!rows.length){ skipped++; return; }
     const sig = computeSignature(h, maxVal, rows, sat);
     if(sets.some(x => x.sig === sig)){ skipped++; return; }
-    insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, name: getNameForHue(h), isNew:true});
+    const nm0 = getNameForHue(h);
+    const eff = (nm0 || fallbackName(h)).trim();
+    let nmFin = nm0, tail;
+    if(nameTaken(eff)){ nmFin = uniqueName(eff); tail = nmFin.slice(eff.length); }
+    insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, name: nmFin, nameTail: tail, isNew:true});
     made++;
   });
   saveSets();
@@ -1977,8 +2106,10 @@ function openNamesSheet(){
 function syncSetNamesFromList(){
   let changed = false;
   sets.forEach(s => {
+    if(s.nameManual) return;
     const nm = getNameForHue(s.hue);
-    if(nm && s.name !== nm){ s.name = nm; changed = true; }
+    const full = nm + (s.nameTail || '');
+    if(nm && s.name !== full){ s.name = full; changed = true; }
   });
   if(changed){ saveSets(); renderSets(); }
 }
