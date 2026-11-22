@@ -1004,7 +1004,18 @@ function currentFgHex(){
 
 const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 function namesAlpha(obj){
-  return Object.keys(obj).sort((a, b) => NAME_COLLATOR.compare(a, b));
+  const hv = n => (obj[n].hue === null || obj[n].hue === undefined) ? null : obj[n].hue;
+  return Object.keys(obj).sort((a, b) => {
+    const ha = hv(a), hb = hv(b);
+    if (ha === null && hb !== null) return 1;
+    if (ha !== null && hb === null) return -1;
+    if (ha !== hb && ha !== null) return ha - hb;
+    return NAME_COLLATOR.compare(a, b);
+  });
+}
+function hueOptLabel(obj, name){
+  const h = obj[name].hue;
+  return (h === null || h === undefined) ? name : name + " [" + h + "\u00B0]";
 }
 function populateSelect(sel, obj, onChange){
   sel.innerHTML = "";
@@ -1016,7 +1027,7 @@ function populateSelect(sel, obj, onChange){
   namesAlpha(obj).forEach(name => {
     const opt = document.createElement("option");
     opt.value = name;
-    opt.textContent = name;
+    opt.textContent = hueOptLabel(obj, name);
     sel.appendChild(opt);
   });
   sel.onchange = () => onChange(sel.value);
@@ -1031,7 +1042,7 @@ function populateFsSelect(sel, obj, onFamily, onCustom){
   namesAlpha(obj).forEach(name => {
     const opt = document.createElement("option");
     opt.value = name;
-    opt.textContent = name;
+    opt.textContent = hueOptLabel(obj, name);
     sel.appendChild(opt);
   });
   const sepOpt = document.createElement("option");
@@ -2119,6 +2130,23 @@ function choiceBanner(text, buttons){
     document.body.appendChild(ov);
   });
 }
+function confirmBanner(text){
+  return new Promise(resolve => {
+    const { ov, box, row } = bannerShell();
+    row.style.justifyContent = "space-between";
+    const msg = document.createElement("div");
+    msg.textContent = text; msg.style.marginBottom = "18px";
+    const done = v => { ov.remove(); resolve(v); };
+    const yes = bannerBtn("Да", false, () => done(true));
+    yes.style.background = "#2e7d32"; yes.style.borderColor = "#2e7d32"; yes.style.color = "#fff";
+    const no = bannerBtn("Отмена", false, () => done(false));
+    no.style.background = "#c62828"; no.style.borderColor = "#c62828"; no.style.color = "#fff";
+    row.appendChild(yes); row.appendChild(no);
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(false); });
+    box.appendChild(msg); box.appendChild(row); ov.appendChild(box);
+    document.body.appendChild(ov);
+  });
+}
 function inputBanner(o){
   return new Promise(resolve => {
     const { ov, box, row } = bannerShell();
@@ -2336,7 +2364,10 @@ function serializeArchive(arr){
 }
 async function createHtmlFile(){
   const d = computeDiff();
-  if (!d.changes && !d.deletions){ showToast("Нет изменений."); return; }
+  if (!d.changes && !d.deletions){
+    const ok = await confirmBanner("Нет изменений. Все равно создать?");
+    if (!ok) return;
+  }
   try {
     const url = location.href.split("#")[0].split("?")[0];
     const resp = await fetch(url, { cache: "no-store" });
