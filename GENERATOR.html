@@ -60,6 +60,10 @@
   .seg button:first-child{border-radius:8px 0 0 8px;}
   .seg button:last-child{border-radius:0 8px 8px 0; border-left:none;}
   .seg button.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .seg.single{width:50%; margin-bottom:0; margin-top:14px;}
+  .seg.single button, .seg.single button.active{background:hsl(48 100% 25%); border-color:hsl(48 100% 25%); color:#fff;}
+  .seg.single button:last-child, .seg.single button.active:last-child{border-radius:8px; border-left:1px solid hsl(48 100% 25%);}
+  body.mode-subs #refCheckRow{display:none !important;}
 
   .panel{
     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px;
@@ -214,7 +218,8 @@
       <input type="text" id="massAdd">
     </div>
 
-    <div id="importBlock" class="panel">
+    <!-- Импорт HEX: законсервирован (скрыт), код и логика сохранены -->
+    <div id="importBlock" class="panel hidden">
       <div class="imp-head">
         <h2 style="margin:0;">Импорт HEX</h2>
         <button type="button" class="primary imp-btn" onclick="importHex()">Импорт</button>
@@ -224,6 +229,10 @@
         <button type="button" id="importApplyBtn" onclick="applyOrCancelImport()">Применить</button>
         <button type="button" onclick="askDeleteImport()">Удалить</button>
       </div>
+    </div>
+
+    <div class="seg single">
+      <button type="button" id="modeSubs" onclick="setMode('subs')">Subtitles</button>
     </div>
   </div>
 
@@ -397,7 +406,8 @@
 <script>
 let sets = [];
 let nextId = 1;
-let mode = 'fonts'; // 'fonts' | 'plates'
+let mode = 'fonts'; // 'fonts' | 'plates' | 'subs'
+const SUB_SFX = '_Sub';
 const MODE_KEY = 'generator_obojm_mode_v1';
 // Fonts: L идёт от большего к меньшему (от светлого). Plates: от меньшего к большему (от тёмного).
 function rowDir(){ return mode === 'plates' ? 1 : -1; }
@@ -407,7 +417,9 @@ function validStartL(n){
   return mode === 'plates' ? (n >= 0 && n <= 99) : (n >= 100 && n <= 255);
 }
 function startLMsg(){
-  return mode === 'plates' ? 'Plates: Старт L — не более двух цифр (0–99).' : 'Fonts: Старт L — трёхзначное число (100–255).';
+  if(mode === 'plates') return 'Plates: Старт L — не более двух цифр (0–99).';
+  if(mode === 'subs') return 'Subtitles: Старт L — трёхзначное число (100–255).';
+  return 'Fonts: Старт L — трёхзначное число (100–255).';
 }
 function onStartLInput(el){
   if(el.value === '') return;
@@ -419,8 +431,8 @@ function onStartLBlur(el){
   if(el.value === '') return;
   if(!validStartL(parseFloat(el.value))) showToast(startLMsg());
 }
-function fallbackName(hue){ return mode === 'plates' ? `Plate_${hue}` : `FONT_${hue}`; }
-function zipName(){ return mode === 'plates' ? 'HUE_Plates.zip' : 'HUE_FONTS.zip'; }
+function fallbackName(hue){ return mode === 'plates' ? `Plate_${hue}` : mode === 'subs' ? `${hue}${SUB_SFX}` : `FONT_${hue}`; }
+function zipName(){ return mode === 'plates' ? 'HUE_Plates.zip' : mode === 'subs' ? 'HUE_Subs.zip' : 'HUE_FONTS.zip'; }
 let lastRows = null;
 let lastRowsOriginal = null;
 let lastHue = null;
@@ -862,12 +874,21 @@ function copyText(text){
   try{ fallbackCopy(text); return Promise.resolve(); }catch(e){ return Promise.reject(e); }
 }
 /* ---------- Одинаковые имена на втором экране ---------- */
+function nameStem(n){ return mode === 'subs' && /_sub$/i.test(n) ? n.slice(0, n.length - SUB_SFX.length) : n; }
+function withExtra(base, extra){ return mode === 'subs' ? nameStem(base) + '_' + extra + SUB_SFX : base + '_' + extra; }
+function tailOf(eff, fin){ return nameStem(fin).slice(nameStem(eff).length); }
+function joinTail(nm, tail){ return mode === 'subs' ? nameStem(nm) + (tail || '') + SUB_SFX : nm + (tail || ''); }
 function setEffName(s){ return (s.name ? s.name : fallbackName(s.hue)).trim(); }
 function nameTaken(n){ const l = n.toLowerCase(); return sets.some(x => setEffName(x).toLowerCase() === l); }
-function uniqueName(base){ let n = 1; while(nameTaken(base + '_' + n)) n++; return base + '_' + n; }
+function uniqueName(base){ let n = 1; while(nameTaken(withExtra(base, n))) n++; return withExtra(base, n); }
 function baseNameOf(s){
   const nm = s.name || '';
-  return s.nameTail && nm.endsWith(s.nameTail) ? nm.slice(0, nm.length - s.nameTail.length) : nm;
+  if(!s.nameTail) return nm;
+  if(mode === 'subs'){
+    const st = nameStem(nm);
+    return st.endsWith(s.nameTail) ? st.slice(0, st.length - s.nameTail.length) + SUB_SFX : nm;
+  }
+  return nm.endsWith(s.nameTail) ? nm.slice(0, nm.length - s.nameTail.length) : nm;
 }
 let dupNameResolve = null;
 function askDupName(){
@@ -901,7 +922,7 @@ async function resolveDupName(baseEff){
   if(!nameTaken(baseEff)) return baseEff;
   const suf = await askDupName();
   if(suf){
-    const cand = baseEff + '_' + suf;
+    const cand = withExtra(baseEff, suf);
     return nameTaken(cand) ? uniqueName(cand) : cand;
   }
   return uniqueName(baseEff);
@@ -924,7 +945,8 @@ function closeRename(){
 function finishRename(){
   const s = sets.find(x => x.id === renameId);
   if(!s){ closeRename(); return; }
-  const v = document.getElementById('renameInput').value.replace(/[\\\/:*?"<>|]/g, '').trim();
+  let v = document.getElementById('renameInput').value.replace(/[\\\/:*?"<>|]/g, '').trim();
+  if(mode === 'subs') v = subName(v);
   if(!v || v === setEffName(s)){ closeRename(); return; }
   const l = v.toLowerCase();
   if(sets.some(x => x !== s && setEffName(x).toLowerCase() === l)){
@@ -1061,7 +1083,7 @@ function closeRecon(msg){
   document.getElementById('reconModal').classList.add('hidden');
   if(msg) showToast(msg);
 }
-function curKind(){ return mode === 'plates' ? 'bg' : 'text'; }
+function curKind(){ return mode === 'plates' ? 'bg' : mode === 'subs' ? 'sub' : 'text'; }
 function normalizeSetForRecon(s){
   if(s.maxVal === undefined) s.maxVal = 255;
   if(s.sat === undefined) s.sat = 1.0;
@@ -1209,7 +1231,7 @@ function afterDownloadSelected(){
   renderSets();
 }
 
-function storageKey(){ return mode === 'plates' ? 'generator_obojm_plates_v1' : 'generator_obojm_sets_v1'; }
+function storageKey(){ return mode === 'plates' ? 'generator_obojm_plates_v1' : mode === 'subs' ? 'generator_obojm_subs_v1' : 'generator_obojm_sets_v1'; }
 
 function saveSets(){
   try{
@@ -1269,7 +1291,7 @@ async function addSet(){
   const nm0 = getNameForHue(lastHue);
   const eff = (nm0 || fallbackName(lastHue)).trim();
   const fin = await resolveDupName(eff);
-  const tail = fin.slice(eff.length);
+  const tail = tailOf(eff, fin);
   if(sets.some(s => s.sig === sig)) return;
   insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: tail ? fin : nm0, nameTail: tail || undefined, isNew:true});
   saveSets();
@@ -1461,7 +1483,7 @@ async function commitEdit(mode){
     closeSaveChoice();
     const baseEff = (baseNameOf(s) || fallbackName(s.hue)).trim();
     const fin = await resolveDupName(baseEff);
-    newTail = fin.slice(baseEff.length);
+    newTail = tailOf(baseEff, fin);
     newName = newTail ? fin : baseNameOf(s);
     const editedRows = s.rows, editedStep = s.step;
     // оригинал возвращаем как был
@@ -1538,7 +1560,7 @@ function detailTable(rows){
   if(mode === 'plates'){
     fs = findRefFontSet();
     if(fs) fIdx = Math.min(fontDefault(), fs.rows.length);
-  }else{
+  }else if(mode === 'fonts'){
     fs = findRefPlateSet();
     if(fs) fIdx = Math.min(plateDefault(), fs.rows.length);
   }
@@ -1705,7 +1727,7 @@ function lockFirstScreen(flag){
   if(returned) returned.locked = flag;
 }
 function blockWhileReturned(){
-  ['showBtn','modeFonts','modePlates'].forEach(id => { document.getElementById(id).disabled = true; });
+  ['showBtn','modeFonts','modePlates','modeSubs'].forEach(id => { document.getElementById(id).disabled = true; });
   document.querySelectorAll('#massBlock button, #massBlock input').forEach(el => { el.disabled = true; });
 }
 function setReturnRowState(open){
@@ -1764,7 +1786,7 @@ function exitReturn(){
   const pre = returned.pre;
   if(returned.locked) lockFirstScreen(false);
   returned = null;
-  ['showBtn','modeFonts','modePlates'].forEach(id => { document.getElementById(id).disabled = false; });
+  ['showBtn','modeFonts','modePlates','modeSubs'].forEach(id => { document.getElementById(id).disabled = false; });
   document.querySelectorAll('#massBlock button, #massBlock input').forEach(el => { el.disabled = false; });
   restoreFirstScreen(pre);
   setReturnRowState(false);
@@ -1807,7 +1829,7 @@ async function commitReturn(m){
     const b0 = lastHue !== s.hue ? getNameForHue(lastHue) : baseNameOf(s);
     const baseEff = (b0 || fallbackName(lastHue)).trim();
     const fin = await resolveDupName(baseEff);
-    const tail = fin.slice(baseEff.length);
+    const tail = tailOf(baseEff, fin);
     name = tail ? fin : b0;
     nameTail = tail || undefined;
     if(!returned || !sets.includes(s)) return;
@@ -1871,7 +1893,7 @@ function findPeakC(hue, maxVal, sat){
 
 
 /* ---------- Импорт HEX (из TEST через буфер обмена) ---------- */
-const IMPORT_KEYS = {fonts:'generator_obojm_import_fonts_v1', plates:'generator_obojm_import_plates_v1'};
+const IMPORT_KEYS = {fonts:'generator_obojm_import_fonts_v1', plates:'generator_obojm_import_plates_v1', subs:'generator_obojm_import_subs_v1'};
 let importItems = [];
 let importNextId = 1;
 function saveImports(){
@@ -2059,7 +2081,7 @@ function createForAllHues(){
     const nm0 = getNameForHue(h);
     const eff = (nm0 || fallbackName(h)).trim();
     let nmFin = nm0, tail;
-    if(nameTaken(eff)){ nmFin = uniqueName(eff); tail = nmFin.slice(eff.length); }
+    if(nameTaken(eff)){ nmFin = uniqueName(eff); tail = tailOf(eff, nmFin); }
     insertSetSorted({id: nextId++, hue: h, maxVal, sat, step, rows, selected:false, sig, name: nmFin, nameTail: tail, isNew:true});
     made++;
   });
@@ -2070,10 +2092,20 @@ function createForAllHues(){
 }
 
 /* ---------- Список названий семейств (по hue) ---------- */
-function namesKey(){ return mode === 'plates' ? 'generator_obojm_plate_names_v1' : 'generator_obojm_names_v1'; }
+function namesKey(){ return mode === 'plates' ? 'generator_obojm_plate_names_v1' : mode === 'subs' ? 'generator_obojm_sub_names_v1' : 'generator_obojm_names_v1'; }
 // Fonts: ВСЕ ЗАГЛАВНЫЕ. Plates: нижний регистр, кроме первой буквы.
+function subName(v){
+  const b = String(v || '').trim().replace(/_sub$/i, '').trim();
+  return b ? b.charAt(0).toUpperCase() + b.slice(1).toLowerCase() + SUB_SFX : '';
+}
+// Subtitles: имя с первой заглавной, суффикс _sub добавляется автоматически (при вводе — после выхода из поля).
+function normNameLive(v){
+  v = String(v || '');
+  return mode === 'subs' ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : normName(v);
+}
 function normName(v){
   v = String(v || '');
+  if(mode === 'subs') return subName(v);
   return mode === 'plates' ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v.toUpperCase();
 }
 let hueNames = []; // [{hue, name}]
@@ -2090,7 +2122,8 @@ function loadNames(){
 }
 function getNameForHue(hue){
   const found = hueNames.find(n => Number(n.hue) === Number(hue));
-  return found && found.name ? found.name.trim() : '';
+  const nm = found && found.name ? found.name.trim() : '';
+  return mode === 'subs' ? subName(nm) : nm;
 }
 function sortNames(){
   hueNames.sort((a,b) => Number(a.hue) - Number(b.hue));
@@ -2108,7 +2141,7 @@ function syncSetNamesFromList(){
   sets.forEach(s => {
     if(s.nameManual) return;
     const nm = getNameForHue(s.hue);
-    const full = nm + (s.nameTail || '');
+    const full = joinTail(nm, s.nameTail);
     if(nm && s.name !== full){ s.name = full; changed = true; }
   });
   if(changed){ saveSets(); renderSets(); }
@@ -2151,7 +2184,7 @@ function renderNamesSheet(){
     <div class="name-row">
       <input type="checkbox" ${n.selected?'checked':''} onchange="toggleNameRow(${i}, this.checked)" title="Отметить для удаления">
       <input class="hueInput" type="number" value="${n.hue}" oninput="updateNameRow(${i},'hue',this.value)">
-      <input class="nameInput" type="text" value="${n.name}" placeholder="Название" oninput="this.value=normName(this.value); updateNameRow(${i},'name',this.value)">
+      <input class="nameInput" type="text" value="${n.name}" placeholder="Название" oninput="this.value=normNameLive(this.value); updateNameRow(${i},'name',this.value)" onchange="this.value=normName(this.value); updateNameRow(${i},'name',this.value)">
     </div>
   `).join('');
 }
@@ -2159,7 +2192,7 @@ function renderNamesSheet(){
 function saveNamesToTxt(){
   if(!hueNames.length){ showToast('Список пуст.'); return; }
   const text = hueNames.map(n => `${n.hue} ${(n.name||'').trim()}`).join('\n') + '\n';
-  triggerDownload(mode === 'plates' ? 'Названия_плашек.txt' : 'Названия_семейств.txt', text);
+  triggerDownload(mode === 'plates' ? 'Названия_плашек.txt' : mode === 'subs' ? 'Названия_субтитров.txt' : 'Названия_семейств.txt', text);
 }
 
 function loadNamesFromTxt(file){
@@ -2193,19 +2226,22 @@ function loadNamesFromTxt(file){
 }
 
 function applyModeUI(){
-  const pl = mode === 'plates';
-  document.getElementById('modeFonts').classList.toggle('active', !pl);
+  const pl = mode === 'plates', sb = mode === 'subs';
+  document.getElementById('modeFonts').classList.toggle('active', mode === 'fonts');
   document.getElementById('modePlates').classList.toggle('active', pl);
-  const title = pl ? 'Имена hue для plates' : 'Имена hue для fonts';
+  document.getElementById('modeSubs').classList.toggle('active', sb);
+  document.body.classList.toggle('mode-subs', sb);
+  document.getElementById('exportBtn').classList.toggle('hidden', sb);
+  const title = pl ? 'Имена hue для plates' : sb ? 'Имена hue для subs' : 'Имена hue для fonts';
   document.getElementById('namesBtn').textContent = title;
   document.getElementById('namesTitle').textContent = title;
-  document.getElementById('modeLabel').textContent = pl ? 'Plates' : 'Fonts';
+  document.getElementById('modeLabel').textContent = pl ? 'Plates' : sb ? 'Subtitles' : 'Fonts';
   document.getElementById('plateBox').classList.toggle('hidden', pl);
   document.getElementById('fontBox').classList.toggle('hidden', !pl);
   document.getElementById('refFontBlock').classList.toggle('hidden', !pl);
-  document.getElementById('refPlateBlock').classList.toggle('hidden', pl);
-  document.getElementById('genStep').value = pl ? 5 : 8;
-  document.getElementById('genCount').value = pl ? 7 : 8;
+  document.getElementById('refPlateBlock').classList.toggle('hidden', pl || sb);
+  document.getElementById('genStep').value = pl ? 5 : sb ? 6 : 8;
+  document.getElementById('genCount').value = pl ? 7 : sb ? 12 : 8;
   updateExportBtn();
 }
 
@@ -2237,7 +2273,7 @@ function setMode(m){
 
 try{
   const m = localStorage.getItem(MODE_KEY);
-  if(m === 'plates' || m === 'fonts') mode = m;
+  if(m === 'plates' || m === 'fonts' || m === 'subs') mode = m;
 }catch(e){}
 loadSets();
 loadImports();
