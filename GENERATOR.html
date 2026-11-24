@@ -2271,10 +2271,6 @@ function setMode(m){
   applyModeUI();
 }
 
-try{
-  const m = localStorage.getItem(MODE_KEY);
-  if(m === 'plates' || m === 'fonts' || m === 'subs') mode = m;
-}catch(e){}
 loadSets();
 loadImports();
 renderImports();
