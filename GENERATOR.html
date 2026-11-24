@@ -160,7 +160,7 @@
         <div><label>Кол-во позиций</label><input type="number" id="genCount" value="8" min="1" max="60"></div>
       </div>
       <div class="row">
-        <div><label>Start C*</label><input type="number" id="genStartC" placeholder="—" min="0" step="0.1"></div>
+        <div><label>End L</label><input type="number" id="genEndL" placeholder="—" min="0" max="255" step="1"></div>
         <div><label>End C*</label><input type="number" id="genEndC" placeholder="—" min="0" step="0.1"></div>
       </div>
       <div class="row">
@@ -385,8 +385,8 @@
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
       <label style="display:inline; margin:0; white-space:nowrap;">Старт</label>
       <input type="number" id="editStartLVal" placeholder="L" min="0" max="255" step="1" style="width:56px;" disabled oninput="onStartLInput(this)" onblur="onEditFieldBlur()">
-      <label style="display:inline; margin:0; white-space:nowrap;">Start C*</label>
-      <input type="number" id="editStartCVal" placeholder="C*" min="0" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
+      <label style="display:inline; margin:0; white-space:nowrap;">End L</label>
+      <input type="number" id="editEndLVal" placeholder="L" min="0" max="255" step="1" style="width:56px;" disabled onblur="onEditFieldBlur()">
       <label style="display:inline; margin:0; white-space:nowrap;">End C*</label>
       <input type="number" id="editEndCVal" placeholder="C*" min="0" step="0.1" style="width:64px;" disabled onblur="onEditFieldBlur()">
       <button id="applyEditsBtn" onclick="applyEdits()" style="background:var(--accent); border-color:var(--accent); color:#fff;" disabled>Применить</button>
@@ -494,11 +494,9 @@ function pctOf(r,g,b,maxVal){
 }
 
 function currentInputs(){
-  let startC = parseFloat(document.getElementById('genStartC').value);
   let endC = parseFloat(document.getElementById('genEndC').value);
   if(returned && returned.exact){
     // поле не тронуто — берём точное C* из семейства, а не округлённое с экрана
-    if(document.getElementById('genStartC').value === returned.exact.startTxt) startC = returned.exact.start;
     if(document.getElementById('genEndC').value === returned.exact.endTxt) endC = returned.exact.end;
   }
   return {
@@ -508,7 +506,7 @@ function currentInputs(){
     count: parseInt(document.getElementById('genCount').value),
     maxVal: parseFloat(document.getElementById('genMax').value) || 255,
     sat: (parseFloat(document.getElementById('genSat').value) || 0) / 100,
-    startC: startC,
+    endL: parseFloat(document.getElementById('genEndL').value),
     endC: endC
   };
 }
@@ -563,28 +561,20 @@ function autoWrite(id, val){
   el.value = val;
 }
 function restoreAutoFields(){
-  [['genStartC','genStart'], ['genEndC','genStep']].forEach(([cId, id]) => {
-    const a = autoFill[id];
-    if(!a) return;
-    if(!isNaN(parseFloat(document.getElementById(cId).value))) return; // C* ещё задано — поле остаётся расчётным
-    const el = document.getElementById(id);
-    if(el.value === a.auto) el.value = a.prev; // не трогаем, если значение уже правили руками
-    delete autoFill[id];
-  });
+  const a = autoFill.genStep;
+  if(!a) return;
+  if(!isNaN(parseFloat(document.getElementById('genEndC').value)) || !isNaN(parseFloat(document.getElementById('genEndL').value))) return;
+  const el = document.getElementById('genStep');
+  if(el.value === a.auto) el.value = a.prev;
+  delete autoFill.genStep;
 }
 
 function buildTable(){
   restoreAutoFields();
-  let {hue, start, step, count, maxVal, sat, startC, endC} = currentInputs();
+  let {hue, start, step, count, maxVal, sat, endL, endC} = currentInputs();
   if(isNaN(hue)){ showToast('Проверьте Hue.'); return; }
-  if(isNaN(start) && isNaN(startC)){ showToast('Проверьте Старт L.'); return; }
-  if(isNaN(startC) && !validStartL(start)){ showToast(startLMsg()); return; }
-  if(!isNaN(startC)){
-    const res = lFromC(hue, startC, maxVal, sat);
-    start = res.L;
-    autoWrite('genStart', start);
-    if(res.unreachable) showToast('Start C* недостижима для этого hue — взят максимум.');
-  }
+  if(isNaN(start)){ showToast('Проверьте Старт L.'); return; }
+  if(!validStartL(start)){ showToast(startLMsg()); return; }
   if(!isNaN(endC) && count > 1){
     const res = lFromC(hue, endC, maxVal, sat);
     const delta = (res.L - start) * rowDir();
@@ -595,6 +585,15 @@ function buildTable(){
     step = Number((delta / (count - 1)).toFixed(2));
     autoWrite('genStep', step);
     if(res.unreachable) showToast('End C* недостижима для этого hue — взят максимум.');
+  } else if(!isNaN(endL) && count > 1){
+    if(endL < 0 || endL > 255){ showToast('End L должен быть в пределах 0–255.'); return; }
+    const delta = (endL - start) * rowDir();
+    if(delta <= 0){
+      showToast('End L должен быть дальше Старт L.');
+      return;
+    }
+    step = Number((delta / (count - 1)).toFixed(2));
+    autoWrite('genStep', step);
   }
   const rows = buildRows(hue, start, step, count, maxVal, sat);
 
@@ -1329,7 +1328,7 @@ function discardPendingEdit(){
 function refreshEditBoxes(){
   const chosen = sets.filter(s => s.selected);
   const startLEl = document.getElementById('editStartLVal');
-  const startEl = document.getElementById('editStartCVal');
+  const endLEl = document.getElementById('editEndLVal');
   const endEl = document.getElementById('editEndCVal');
   const applyBtn = document.getElementById('applyEditsBtn');
   const saveBtn = document.getElementById('saveEditsBtn');
@@ -1340,16 +1339,16 @@ function refreshEditBoxes(){
       editSession = { id: s.id, rows: s.rows.map(r => ({...r})), step: s.step, sat: s.sat };
     }
     startLEl.value = s.rows[0].L;
-    startEl.value = s.rows[0].C.toFixed(1);
+    endLEl.value = s.rows[s.rows.length-1].L;
     endEl.value = s.rows[s.rows.length-1].C.toFixed(1);
-    startLEl.disabled = false; startEl.disabled = false; endEl.disabled = false;
+    startLEl.disabled = false; endLEl.disabled = false; endEl.disabled = false;
     applyBtn.disabled = false; saveBtn.disabled = false;
   } else {
     discardPendingEdit();
     startLEl.value = '';
-    startEl.value = '';
+    endLEl.value = '';
     endEl.value = '';
-    startLEl.disabled = true; startEl.disabled = true; endEl.disabled = true;
+    startLEl.disabled = true; endLEl.disabled = true; endEl.disabled = true;
     applyBtn.disabled = true; saveBtn.disabled = true;
   }
 }
@@ -1369,7 +1368,7 @@ function getSingleSelected(){
 // в другое место экрана) — дублирует «Применить».
 function onEditFieldBlur(){
   setTimeout(() => {
-    const groupIds = ['editStartLVal','editStartCVal','editEndCVal'];
+    const groupIds = ['editStartLVal','editEndLVal','editEndCVal'];
     const active = document.activeElement;
     if(active && groupIds.includes(active.id)) return; // переход между своими полями — не трогаем
     if(!document.getElementById('applyEditsBtn').disabled){
@@ -1389,22 +1388,22 @@ function hasUnsavedEdit(){
   return !rowsEqual(s.rows, editSession.rows);
 }
 
-// Правила: изменение «Старт» (L) или Start C* сдвигает весь ряд с прежним шагом;
-// изменение End C* пересчитывает шаг при неизменном старте.
+// Правила: изменение «Старт» (L) сдвигает весь ряд с прежним шагом;
+// изменение End L или End C* пересчитывает шаг при неизменном старте.
 // Возвращает true, если ряд корректен (или изменений нет).
 function applyEdits(){
   const s = getSingleSelected();
   if(!s) return false;
   const rawL = document.getElementById('editStartLVal').value;
-  const rawStart = document.getElementById('editStartCVal').value;
+  const rawEndL = document.getElementById('editEndLVal').value;
   const rawEnd = document.getElementById('editEndCVal').value;
-  if(rawL==='' || rawStart==='' || rawEnd===''){ showToast('Заполните Старт, Start C* и End C*.'); return false; }
+  if(rawL==='' || rawEndL==='' || rawEnd===''){ showToast('Заполните Старт, End L и End C*.'); return false; }
   const count = s.rows.length;
   const curL = s.rows[0].L;
   const startLChanged = parseFloat(rawL) !== curL;
-  const startCChanged = parseFloat(rawStart).toFixed(1) !== s.rows[0].C.toFixed(1);
+  const endLChanged = parseFloat(rawEndL) !== s.rows[count-1].L;
   const endChanged = parseFloat(rawEnd).toFixed(1) !== s.rows[count-1].C.toFixed(1);
-  if(!startLChanged && !startCChanged && !endChanged) return true;
+  if(!startLChanged && !endLChanged && !endChanged) return true;
 
   let unreachable = false;
   let startL = curL;
@@ -1412,18 +1411,20 @@ function applyEdits(){
     startL = Math.round(parseFloat(rawL));
     if(isNaN(startL) || startL < 0 || startL > 255){ showToast('Старт должен быть в пределах 0–255.'); return false; }
     if(!validStartL(startL)){ showToast(startLMsg()); return false; }
-  } else if(startCChanged){
-    const a = lFromC(s.hue, parseFloat(rawStart), s.maxVal, s.sat);
-    startL = a.L;
-    unreachable = unreachable || a.unreachable;
   }
   let step = s.step;
   if(endChanged && count > 1){
     const b = lFromC(s.hue, parseFloat(rawEnd), s.maxVal, s.sat);
     const delta = (b.L - startL) * rowDir();
-    if(delta <= 0){ showToast('End C* должна быть больше Start C*.'); return false; }
+    if(delta <= 0){ showToast('End C* должна быть больше C* первой позиции.'); return false; }
     step = Number((delta / (count - 1)).toFixed(2));
     unreachable = unreachable || b.unreachable;
+  } else if(endLChanged && count > 1){
+    const eL = Math.round(parseFloat(rawEndL));
+    if(isNaN(eL) || eL < 0 || eL > 255){ showToast('End L должен быть в пределах 0–255.'); return false; }
+    const delta = (eL - startL) * rowDir();
+    if(delta <= 0){ showToast('End L должен быть дальше Старт L.'); return false; }
+    step = Number((delta / (count - 1)).toFixed(2));
   }
   const newRows = buildRows(s.hue, startL, step, count, s.maxVal, s.sat);
   if(newRows.length !== count){ showToast('Ряд выходит за пределы L 0–255.'); return false; }
@@ -1432,7 +1433,7 @@ function applyEdits(){
   s.step = step;
   s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
   document.getElementById('editStartLVal').value = newRows[0].L;
-  document.getElementById('editStartCVal').value = newRows[0].C.toFixed(1);
+  document.getElementById('editEndLVal').value = newRows[newRows.length-1].L;
   document.getElementById('editEndCVal').value = newRows[newRows.length-1].C.toFixed(1);
   renderSets();
   return true;
@@ -1607,7 +1608,7 @@ function renderSets(){
 }
 
 function clearEditBoxesUI(){
-  const ids = ['editStartLVal','editStartCVal','editEndCVal'];
+  const ids = ['editStartLVal','editEndLVal','editEndCVal'];
   ids.forEach(id => { const el = document.getElementById(id); el.value=''; el.disabled=true; });
   document.getElementById('applyEditsBtn').disabled = true;
   document.getElementById('saveEditsBtn').disabled = true;
@@ -1650,7 +1651,7 @@ function showSelect(){
 function captureFirstScreen(){
   const g = id => document.getElementById(id);
   const vals = {};
-  ['genHue','genStart','genStep','genCount','genStartC','genEndC','genMax','genSat','plateIdx','fontIdx'].forEach(id => vals[id] = g(id).value);
+  ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat','plateIdx','fontIdx'].forEach(id => vals[id] = g(id).value);
   return {
     vals,
     plateChk: g('plateChk').checked, fontChk: g('fontChk').checked,
@@ -1692,9 +1693,9 @@ function populateFromSet(s){
   g('genStart').value = s.rows[0].L;
   g('genStep').value = s.step;
   g('genCount').value = s.rows.length;
-  g('genStartC').value = s.rows[0].C.toFixed(1);
+  g('genEndL').value = s.rows[s.rows.length-1].L;
   g('genEndC').value = s.rows[s.rows.length-1].C.toFixed(1);
-  if(returned) returned.exact = {start: s.rows[0].C, end: s.rows[s.rows.length-1].C, startTxt: g('genStartC').value, endTxt: g('genEndC').value};
+  if(returned) returned.exact = {end: s.rows[s.rows.length-1].C, endTxt: g('genEndC').value};
   g('genMax').value = s.maxVal;
   g('genSat').value = Math.round(s.sat * 10000) / 100;
   lastRows = s.rows.map(r => ({...r}));
@@ -1851,11 +1852,12 @@ async function commitReturn(m){
 }
 
 document.getElementById('selectScreen').addEventListener('input', e => {
+  if(e.target.id === 'genEndL') document.getElementById('genEndC').value = '';
+  if(e.target.id === 'genEndC') document.getElementById('genEndL').value = '';
   if(returned && returned.open){
-    if(e.target.id === 'genStart') document.getElementById('genStartC').value = '';
-    if(e.target.id === 'genStep') document.getElementById('genEndC').value = '';
+    if(e.target.id === 'genStep'){ document.getElementById('genEndC').value = ''; document.getElementById('genEndL').value = ''; }
   }
-  if(returned && returned.open && ['genHue','genStart','genStep','genCount','genStartC','genEndC','genMax','genSat'].includes(e.target.id)) returned.dirty = true;
+  if(returned && returned.open && ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat'].includes(e.target.id)) returned.dirty = true;
 });
 
 /* ---------- Lab / C* (для «системного соответствия», см. переписку) ---------- */
@@ -2002,7 +2004,7 @@ function applyOrCancelImport(){
   g('genSat').value = x.sat;
   g('genStep').value = pl ? 5 : 8;
   g('genCount').value = pl ? 7 : 8;
-  g('genStartC').value = '';
+  g('genEndL').value = '';
   g('genEndC').value = '';
   setImportApplied(true);
 }
@@ -2010,7 +2012,7 @@ function cancelImport(){
   const pl = mode === 'plates';
   const g = id => document.getElementById(id);
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
-  ['genHue','genStart','genStartC','genEndC'].forEach(id => { g(id).value = ''; });
+  ['genHue','genStart','genEndL','genEndC'].forEach(id => { g(id).value = ''; });
   g('genMax').value = 255;
   g('genSat').value = 100;
   g('genStep').value = pl ? 5 : 8;
@@ -2042,11 +2044,11 @@ function parseHueList(str){
 
 function createForAllHues(){
   restoreAutoFields();
-  const {start: start0, step: step0, count, maxVal, startC, endC} = currentInputs();
+  const {start: start0, step: step0, count, maxVal, endL, endC} = currentInputs();
   if(isNaN(count) || count < 1){ showToast('Проверьте Кол-во позиций.'); return; }
-  if(isNaN(startC) && isNaN(start0)){ showToast('Проверьте Старт L.'); return; }
-  if(isNaN(startC) && !validStartL(start0)){ showToast(startLMsg()); return; }
-  if(isNaN(step0) && isNaN(endC)){ showToast('Проверьте Шаг.'); return; }
+  if(isNaN(start0)){ showToast('Проверьте Старт L.'); return; }
+  if(!validStartL(start0)){ showToast(startLMsg()); return; }
+  if(isNaN(step0) && isNaN(endC) && isNaN(endL)){ showToast('Проверьте Шаг.'); return; }
 
   const sHues = parseHueList(document.getElementById('massSHues').value);
   let sCustom = 1;
@@ -2067,10 +2069,13 @@ function createForAllHues(){
   list.forEach(h => {
     const sat = sHues.includes(h) ? sCustom : 1.0;
     let start = start0, step = step0;
-    if(!isNaN(startC)) start = lFromC(h, startC, maxVal, sat).L;
     if(!isNaN(endC) && count > 1){
       const eL = lFromC(h, endC, maxVal, sat).L;
       const delta = (eL - start) * rowDir();
+      if(delta <= 0){ skipped++; return; }
+      step = Number((delta / (count - 1)).toFixed(2));
+    } else if(!isNaN(endL) && count > 1){
+      const delta = (endL - start) * rowDir();
       if(delta <= 0){ skipped++; return; }
       step = Number((delta / (count - 1)).toFixed(2));
     }
@@ -2263,7 +2268,7 @@ function setMode(m){
   document.getElementById('addBtn').disabled = true;
   document.getElementById('refCheckRow').classList.add('hidden');
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
-  ['genHue','genStartC','genEndC'].forEach(id => { document.getElementById(id).value = ''; });
+  ['genHue','genEndL','genEndC'].forEach(id => { document.getElementById(id).value = ''; });
   setImportApplied(false);
   const st = document.getElementById('genStart');
   if(st.value !== '' && !validStartL(parseFloat(st.value))) st.value = '';
