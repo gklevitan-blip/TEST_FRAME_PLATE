@@ -81,6 +81,13 @@
     display:inline-block; width:16px; height:16px; border-radius:4px;
     border:1px solid rgba(255,255,255,.15); vertical-align:middle;
   }
+  .swatch.sel{width:22px; height:22px; box-sizing:border-box; cursor:pointer; position:relative;}
+  .swatch.sel.on{outline:2px solid var(--accent); outline-offset:1px;}
+  .swatch.sel.on::after{
+    content:''; position:absolute; left:6px; top:1px; width:6px; height:12px;
+    border:solid #fff; border-width:0 2.5px 2.5px 0; transform:rotate(45deg);
+    filter:drop-shadow(0 0 1px rgba(0,0,0,.9));
+  }
   .result{margin-top:12px; padding:12px; background:#22262c; border-radius:8px; font-size:13px;}
   .result b{font-size:15px;}
   .hint{font-size:12px; color:var(--dim); margin-top:6px;}
@@ -156,7 +163,7 @@
         <div><label>Старт L</label><input type="number" id="genStart" oninput="onStartLInput(this)" onchange="onStartLBlur(this)"></div>
       </div>
       <div class="row">
-        <div><label>Шаг</label><input type="number" id="genStep" value="8" step="0.1"></div>
+        <div><label>Шаг</label><input type="number" id="genStep" value="8" step="0.1" placeholder="—"></div>
         <div><label>Кол-во позиций</label><input type="number" id="genCount" value="8" min="1" max="60"></div>
       </div>
       <div class="row">
@@ -240,6 +247,11 @@
     <h2>Построенный ряд</h2>
     <div id="genOut"></div>
     <div id="refCheckRow" class="hint hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap;">
+      <div id="selBox" style="display:flex; align-items:center; gap:6px;">
+        <button type="button" id="selBtn" style="padding:7px 10px;" onclick="selectStart()">Выбрать</button>
+        <button type="button" style="padding:7px 10px;" onclick="selectRebuild()">Перестроить</button>
+        <button type="button" style="padding:7px 10px;" onclick="selectCancel()">Отменить</button>
+      </div>
       <div id="plateBox" style="display:flex; align-items:center; gap:8px;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
           <input type="checkbox" id="plateChk" onchange="onPlateChange()">
@@ -595,14 +607,16 @@ function buildTable(){
     step = Number((delta / (count - 1)).toFixed(2));
     autoWrite('genStep', step);
   }
+  if(isNaN(step)){ showToast('Проверьте Шаг.'); return; }
   const rows = buildRows(hue, start, step, count, maxVal, sat);
 
-  if(lastRowsOriginal && computeSignature(hue, maxVal, rows, sat) === computeSignature(lastHue, lastMaxVal, lastRowsOriginal, lastSat)){
+  if(!rebuilt && lastRowsOriginal && computeSignature(hue, maxVal, rows, sat) === computeSignature(lastHue, lastMaxVal, lastRowsOriginal, lastSat)){
     if(returned) returned.dirty = false;
     showToast('Уже создано.');
     return;
   }
 
+  selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
   lastRowsOriginal = rows;
   lastRows = rows;
   resetFontIdxToDefault();
@@ -768,12 +782,64 @@ function onRefFontChange(final){
   onPlateChange();
 }
 
+/* ---------- Ручной выбор позиций (Fonts): Выбрать / Перестроить / Отменить ---------- */
+let selMode = false;
+let rebuilt = false;
+const selChecked = new Set();
+function updateSelUI(){
+  const b = document.getElementById('selBtn');
+  if(b) b.classList.toggle('primary', selMode);
+}
+function rerenderTable(){
+  if(lastRows) renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
+}
+function exitSel(){
+  selMode = false; selChecked.clear(); updateSelUI(); rerenderTable();
+}
+function selectStart(){
+  if(!lastRows || selMode) return;
+  selMode = true; selChecked.clear(); updateSelUI(); rerenderTable();
+}
+function toggleSel(i, el){
+  if(!selMode) return;
+  if(selChecked.has(i)) selChecked.delete(i); else selChecked.add(i);
+  el.classList.toggle('on', selChecked.has(i));
+}
+function selectRebuild(){
+  if(!lastRows) return;
+  if(!selMode){ showToast('Сначала нажмите «Выбрать».'); return; }
+  const n = selChecked.size;
+  if(!n){ showToast('Отметьте хотя бы одну позицию.'); return; }
+  const want = parseInt(document.getElementById('genCount').value);
+  lastRows = lastRows.filter((r, i) => selChecked.has(i)).map(r => ({...r}));
+  lastStep = null;
+  rebuilt = true;
+  delete autoFill.genStep;
+  document.getElementById('genStep').value = '';
+  selMode = false; selChecked.clear(); updateSelUI();
+  rerenderTable();
+  if(!isNaN(want) && n !== want) showToast('Отмечено ' + n + ', а «Кол-во позиций» = ' + want + '.');
+}
+function selectCancel(){
+  if(!lastRows || !lastRowsOriginal) return;
+  selMode = false; selChecked.clear(); updateSelUI();
+  lastRows = lastRowsOriginal.map(r => ({...r}));
+  lastStep = lastStepOriginal;
+  rebuilt = false;
+  delete autoFill.genStep;
+  document.getElementById('genStep').value = (lastStepOriginal === null || lastStepOriginal === undefined) ? '' : lastStepOriginal;
+  rerenderTable();
+}
+
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
   const showCR = (mode === 'fonts' && document.getElementById('plateChk').checked && !!findRefPlateSet()) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
   html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
-  rows.forEach(r => {
-    html += `<tr><td><span class="swatch" style="background:#${r.hex}"></span></td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
+  rows.forEach((r, i) => {
+    const sw = selMode
+      ? `<span class="swatch sel${selChecked.has(i) ? ' on' : ''}" style="background:#${r.hex}" onclick="toggleSel(${i}, this)"></span>`
+      : `<span class="swatch" style="background:#${r.hex}"></span>`;
+    html += `<tr><td>${sw}</td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
@@ -785,9 +851,10 @@ function summaryLine(hue, maxVal, rows, sat, step, edited){
   const first = rows[0], last = rows[rows.length-1];
   const satPct = sat===undefined ? 100 : Math.round(sat*100);
   const stepVal = step===undefined ? (rows.length>1 ? (rows[0].L-rows[1].L) : 0) : step;
+  const stepTxt = stepVal === null ? '—' : stepVal.toFixed(1);
   const wrap = (txt, on) => on ? `<span class="edited-param">${txt}</span>` : txt;
   const cPart = `C* ${wrap(Math.round(first.C), edited.startC)}-${wrap(Math.round(last.C), edited.endC)}`;
-  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepVal.toFixed(1)}, ${cPart}, ${first.pct}-${last.pct}%`;
+  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepTxt}, ${cPart}, ${first.pct}-${last.pct}%`;
 }
 
 function rowsToText(rows){
@@ -1413,6 +1480,25 @@ function applyEdits(){
     if(!validStartL(startL)){ showToast(startLMsg()); return false; }
   }
   let step = s.step;
+  if(step === null || step === undefined){
+    if(!endChanged && !endLChanged){
+      const delta = startL - curL;
+      const nr = s.rows.map(r => {
+        const L = r.L + delta;
+        if(L < 0 || L > 255) return null;
+        const [rr,gg,bb] = hlsToRgb(s.hue, L/255, s.sat, s.maxVal);
+        return {hex: toHex(rr,gg,bb), L, real: rgbToLstar255(rr,gg,bb), C: labC(rr,gg,bb).C, pct: pctOf(rr,gg,bb,s.maxVal)};
+      });
+      if(nr.some(x => x === null)){ showToast('Ряд выходит за пределы L 0–255.'); return false; }
+      s.rows = nr;
+      s.sig = computeSignature(s.hue, s.maxVal, s.rows, s.sat);
+      document.getElementById('editStartLVal').value = nr[0].L;
+      document.getElementById('editEndLVal').value = nr[nr.length-1].L;
+      document.getElementById('editEndCVal').value = nr[nr.length-1].C.toFixed(1);
+      renderSets();
+      return true;
+    }
+  }
   if(endChanged && count > 1){
     const b = lFromC(s.hue, parseFloat(rawEnd), s.maxVal, s.sat);
     const delta = (b.L - startL) * rowDir();
@@ -1636,6 +1722,7 @@ function showSelect(){
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('selectScreen').classList.remove('hidden');
   clearEditBoxes();
+  selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
   lastRows = null;
   lastRowsOriginal = null;
   lastHue = null;
@@ -1691,7 +1778,7 @@ function populateFromSet(s){
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
   g('genHue').value = s.hue;
   g('genStart').value = s.rows[0].L;
-  g('genStep').value = s.step;
+  g('genStep').value = (s.step === null || s.step === undefined) ? '' : s.step;
   g('genCount').value = s.rows.length;
   g('genEndL').value = s.rows[s.rows.length-1].L;
   g('genEndC').value = s.rows[s.rows.length-1].C.toFixed(1);
@@ -1702,6 +1789,7 @@ function populateFromSet(s){
   lastRowsOriginal = s.rows.map(r => ({...r}));
   lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
   lastStep = s.step; lastStepOriginal = s.step;
+  selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
   resetFontIdxToDefault();
   resetPlateIdxToDefault();
   g('refCheckRow').classList.remove('hidden');
@@ -1744,6 +1832,7 @@ function returnToFirst(id){
   }
   const s = sets.find(x => x.id === id);
   if(!s) return;
+  if(selMode) exitSel();
   returned = {id, pre: captureFirstScreen(), open: false, dirty: false, locked: false};
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('selectScreen').classList.remove('hidden');
@@ -2241,6 +2330,7 @@ function applyModeUI(){
   document.getElementById('namesBtn').textContent = title;
   document.getElementById('namesTitle').textContent = title;
   document.getElementById('modeLabel').textContent = pl ? 'Plates' : sb ? 'Subtitles' : 'Fonts';
+  document.getElementById('selBox').classList.toggle('hidden', mode !== 'fonts');
   document.getElementById('plateBox').classList.toggle('hidden', pl);
   document.getElementById('fontBox').classList.toggle('hidden', !pl);
   document.getElementById('refFontBlock').classList.toggle('hidden', !pl);
@@ -2264,6 +2354,7 @@ function setMode(m){
   renderImports();
   lastRows = null; lastRowsOriginal = null;
   lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
+  selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
   document.getElementById('genOut').innerHTML = '';
   document.getElementById('addBtn').disabled = true;
   document.getElementById('refCheckRow').classList.add('hidden');
