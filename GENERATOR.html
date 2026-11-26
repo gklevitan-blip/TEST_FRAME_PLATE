@@ -91,9 +91,9 @@
   .cr-win{background:rgba(0,0,0,.6); border-radius:8px; padding:2px; display:flex;}
   .cr-win input{width:38px; padding:3px 2px; text-align:center; font-size:14px; color:#fff; background:transparent; border:1px solid rgba(255,255,255,.4); border-radius:6px;}
   .float-back{
-    position:fixed; right:14px; bottom:20px; width:46px; height:46px; padding:0; border-radius:50%;
-    background:rgba(0,0,0,.72); color:#fff; border:1px solid rgba(255,255,255,.35);
-    font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center;
+    position:fixed; left:14px; bottom:20px; padding:9px 16px; border-radius:8px;
+    background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
     z-index:900; box-shadow:0 2px 8px rgba(0,0,0,.4);
   }
   .result{margin-top:12px; padding:12px; background:#22262c; border-radius:8px; font-size:13px;}
@@ -186,7 +186,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="primary" onclick="buildTable()">Построить</button>
+        <button class="primary" id="buildBtn" onclick="buildTable()">Построить</button>
         <button id="addBtn" onclick="addSet()" disabled>Добавить</button>
         <button id="showBtn" onclick="showResults()" style="margin-left:auto;">Показать</button>
       </div>
@@ -277,7 +277,7 @@
   </div>
 </div>
 
-<button type="button" id="floatBack" class="float-back hidden" onclick="floatBackClick()" title="На первый экран">↩</button>
+<button type="button" id="floatBack" class="float-back hidden" onclick="backClick()" title="Вернуться к выбору"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
 
 <div id="namesModal" class="modal-overlay hidden">
   <div class="modal-box">
@@ -387,7 +387,7 @@
 <div class="screen hidden" id="resultScreen">
   <div class="topbar">
     <div class="left-actions">
-      <button onclick="showSelect()" title="Вернуться к выбору" style="padding:9px 16px; display:flex; align-items:center;"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
+      <button class="keep-on" onclick="backClick()" title="Вернуться к выбору" style="padding:9px 16px; display:flex; align-items:center;"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
       <span id="modeLabel" style="align-self:center; color:var(--dim); font-size:13px; font-weight:600;">Fonts</span>
     </div>
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
@@ -627,6 +627,8 @@ function buildTable(){
 
   if(returned) returned.dirty = false;
   document.getElementById('refCheckRow').classList.remove('hidden');
+  builtKey = paramsKey();
+  updateBuildBtn();
 }
 
 /* ---------- Серые плашки (1 — самая тёмная, 7 — самая светлая) и контраст ---------- */
@@ -825,6 +827,18 @@ function selectCancel(){
   delete autoFill.genStep;
   document.getElementById('genStep').value = (lastStepOriginal === null || lastStepOriginal === undefined) ? '' : lastStepOriginal;
   rerenderTable();
+}
+
+/* ---------- «Построить» гаснет, пока параметры не изменены ---------- */
+let builtKey = null;
+function paramsKey(){
+  return ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat'].map(id => document.getElementById(id).value).join('|');
+}
+function updateBuildBtn(){
+  const b = document.getElementById('buildBtn');
+  if(!b) return;
+  if(returned && !returned.open) return;
+  b.disabled = (builtKey !== null && paramsKey() === builtKey);
 }
 
 function renderTable(hue, maxVal, rows, sat, step){
@@ -1615,14 +1629,14 @@ function contrastHex(a, b){
   const x = relLum(a), y = relLum(b);
   return (Math.max(x,y)+0.05) / (Math.min(x,y)+0.05);
 }
-function detailTable(rows){
+function detailTable(rows, ovr){
   let fs = null, fIdx = 1;
   if(mode === 'plates'){
     fs = findRefFontSet();
-    if(fs) fIdx = Math.min(fontDefault(), fs.rows.length);
+    if(fs) fIdx = Math.min(ovr || fontDefault(), fs.rows.length);
   }else if(mode === 'fonts'){
     fs = findRefPlateSet();
-    if(fs) fIdx = Math.min(plateDefault(), fs.rows.length);
+    if(fs) fIdx = Math.min(ovr || plateDefault(), fs.rows.length);
   }
   const lines = rows.map(r => {
     let t = `${r.hex}  L=${String(r.L).padEnd(3)}  C° ${r.C.toFixed(1)}`;
@@ -1633,7 +1647,7 @@ function detailTable(rows){
 }
 
 function toggleDetail(id){
-  if(expandedSets.has(id)) expandedSets.delete(id); else expandedSets.add(id);
+  if(expandedSets.has(id)){ expandedSets.delete(id); delete stripCr[id]; } else expandedSets.add(id);
   renderSets();
 }
 
@@ -1648,10 +1662,16 @@ function renderSets(){
     const tag = changeSuffix(s);
     const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
     const isOpen = expandedSets.has(s.id);
-    const crIdx = isOpen ? crRefIdx() : null;
+    const crIdx = isOpen ? crRefIdx(s.id) : null;
+    const retAt = Math.max(0, s.rows.length - 2);
     const winAt = Math.min(7, s.rows.length - 1);
-    const strip = s.rows.map((r, i) => `<div style="background:#${r.hex}">${(crIdx !== null && i === winAt) ? `<span class="cr-win" onclick="event.stopPropagation()"><input type="number" min="1" step="1" value="${crIdx}" onclick="event.stopPropagation()" onchange="setCrRef(this.value)"></span>` : ''}</div>`).join('');
-    const detail = isOpen ? detailTable(s.rows) : '';
+    const strip = s.rows.map((r, i) => {
+      let inner = '';
+      if(isOpen && i === retAt && !returned) inner += `<span class="ret-icon" onclick="event.stopPropagation(); returnToFirst(${s.id})">↩</span>`;
+      if(crIdx !== null && i === winAt) inner += `<span class="cr-win" onclick="event.stopPropagation()"><input type="number" class="cr-inp" step="1" value="${crIdx}" onclick="event.stopPropagation()" onchange="setCrRef(${s.id}, this.value)"></span>`;
+      return `<div style="background:#${r.hex}">${inner}</div>`;
+    }).join('');
+    const detail = isOpen ? detailTable(s.rows, stripCr[s.id]) : '';
     return `
       <div class="set-block">
         <div class="set-header">
@@ -1667,6 +1687,7 @@ function renderSets(){
   }).join('');
   updateSelectAllBtn();
   updateFloatBack();
+  applyViewOnly();
 }
 
 /* ---------- Контраст на втором экране и плавающая стрелка возврата ---------- */
@@ -1675,45 +1696,54 @@ function crRefInfo(){
   if(mode === 'fonts') return {fs: findRefPlateSet(), kind: 'plate'};
   return null;
 }
-function crRefIdx(){
+const stripCr = {};
+function crRefIdx(id){
   const ri = crRefInfo();
   if(!ri || !ri.fs) return null;
-  return Math.min(ri.kind === 'font' ? fontDefault() : plateDefault(), ri.fs.rows.length);
+  const def = ri.kind === 'font' ? fontDefault() : plateDefault();
+  return Math.min(stripCr[id] || def, ri.fs.rows.length);
 }
-function setCrRef(v){
+function setCrRef(id, v){
   const ri = crRefInfo();
-  if(!ri || !ri.fs){ return; }
-  let n = parseInt(v);
-  if(isNaN(n)){ renderSets(); return; }
-  n = Math.max(1, Math.min(n, ri.fs.rows.length));
-  if(ri.kind === 'font'){ document.getElementById('refFontDef').value = n; onRefFontDefChange(); }
-  else { document.getElementById('refPlateDef').value = n; onRefPlateDefChange(); }
+  if(!ri || !ri.fs) return;
+  const max = ri.fs.rows.length;
+  const t = String(v).trim();
+  if(!/^\d+$/.test(t) || +t < 1 || +t > max){
+    showToast('Номер плашки — целое число от 1 до ' + max + '.');
+    renderSets();
+    return;
+  }
+  const def = Math.min(ri.kind === 'font' ? fontDefault() : plateDefault(), max);
+  if(+t === def) delete stripCr[id]; else stripCr[id] = +t;
   renderSets();
 }
-let floatBackId = null;
 function updateFloatBack(){
   const b = document.getElementById('floatBack');
   const rs = document.getElementById('resultScreen');
   if(!b || !rs) return;
-  floatBackId = null;
-  if(!rs.classList.contains('hidden') && !returned){
-    const mid = window.innerHeight / 2;
-    let bd = Infinity;
-    sets.forEach(s => {
-      if(!expandedSets.has(s.id)) return;
-      const el = document.getElementById('strip-' + s.id);
-      if(!el) return;
-      const blk = el.closest('.set-block') || el;
-      const r = blk.getBoundingClientRect();
-      const d = (r.top <= mid && r.bottom >= mid) ? 0 : Math.min(Math.abs(r.top - mid), Math.abs(r.bottom - mid));
-      if(d < bd){ bd = d; floatBackId = s.id; }
-    });
-  }
-  b.classList.toggle('hidden', floatBackId === null);
+  b.classList.toggle('hidden', rs.classList.contains('hidden'));
 }
-function floatBackClick(){ if(floatBackId !== null) returnToFirst(floatBackId); }
-window.addEventListener('scroll', updateFloatBack, {passive: true});
-window.addEventListener('resize', updateFloatBack);
+function backClick(){
+  if(returned){
+    document.getElementById('resultScreen').classList.add('hidden');
+    document.getElementById('selectScreen').classList.remove('hidden');
+    window.scrollTo(0, 0);
+    return;
+  }
+  showSelect();
+}
+function applyViewOnly(){
+  const rs = document.getElementById('resultScreen');
+  if(!rs) return;
+  rs.querySelectorAll('button, input').forEach(el => {
+    if(returned){
+      if(el.closest('.keep-on') || el.classList.contains('cr-inp')) return;
+      if(!el.disabled){ el.disabled = true; el.dataset.vo = '1'; }
+    } else if(el.dataset.vo){
+      el.disabled = false; delete el.dataset.vo;
+    }
+  });
+}
 new MutationObserver(updateFloatBack).observe(document.getElementById('resultScreen'), {attributes: true, attributeFilter: ['class']});
 
 function clearEditBoxesUI(){
@@ -1736,12 +1766,14 @@ function showResults(){
   document.getElementById('resultScreen').classList.remove('hidden');
   renderSets();
   clearEditBoxes();
+  applyViewOnly();
 }
 function showSelect(){
   if(sets.some(s => s.selected)){
     showToast('Сначала решите, что делать с отмеченной полосой — снимите галку.');
     return;
   }
+  const wasSync = builtKey !== null && paramsKey() === builtKey;
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('selectScreen').classList.remove('hidden');
   clearEditBoxes();
@@ -1755,6 +1787,8 @@ function showSelect(){
   document.getElementById('genMax').value = 255;
   document.getElementById('genSat').value = 100;
   document.getElementById('refCheckRow').classList.add('hidden');
+  if(wasSync) builtKey = paramsKey();
+  updateBuildBtn();
 }
 
 /* ---------- Возврат семейства со второго экрана на первый ---------- */
@@ -1767,7 +1801,7 @@ function captureFirstScreen(){
     fontChk: g('fontChk').checked,
     rowHidden: g('refCheckRow').classList.contains('hidden'),
     genOut: g('genOut').innerHTML, addDis: g('addBtn').disabled,
-    lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx,
+    lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx, builtKey,
     autoFill: JSON.parse(JSON.stringify(autoFill))
   };
 }
@@ -1781,6 +1815,7 @@ function restoreFirstScreen(pre){
   lastHue = pre.lastHue; lastMaxVal = pre.lastMaxVal; lastSat = pre.lastSat;
   lastStep = pre.lastStep; lastStepOriginal = pre.lastStepOriginal;
   lastFontIdx = pre.lastFontIdx; lastPlateIdx = pre.lastPlateIdx;
+  builtKey = pre.builtKey; updateBuildBtn();
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
   Object.assign(autoFill, pre.autoFill);
 }
@@ -1813,6 +1848,7 @@ function populateFromSet(s){
   lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
   lastStep = s.step; lastStepOriginal = s.step;
   selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
+  builtKey = paramsKey();
   resetFontIdxToDefault();
   resetPlateIdxToDefault();
   g('refCheckRow').classList.remove('hidden');
@@ -1825,21 +1861,22 @@ function lockFirstScreen(flag){
   if(flag){
     lockPrev = new Set();
     els.forEach(el => {
-      if(el.closest('#returnRow')) return;
+      if(el.closest('#returnRow') || el.id === 'showBtn') return;
       if(el.disabled) lockPrev.add(el);
       el.disabled = true;
     });
   } else {
     els.forEach(el => {
-      if(el.closest('#returnRow')) return;
+      if(el.closest('#returnRow') || el.id === 'showBtn') return;
       if(!lockPrev.has(el)) el.disabled = false;
     });
     lockPrev = new Set();
   }
   if(returned) returned.locked = flag;
+  updateBuildBtn();
 }
 function blockWhileReturned(){
-  ['showBtn','modeFonts','modePlates','modeSubs'].forEach(id => { document.getElementById(id).disabled = true; });
+  ['modeFonts','modePlates','modeSubs'].forEach(id => { document.getElementById(id).disabled = true; });
   document.querySelectorAll('#massBlock button, #massBlock input').forEach(el => { el.disabled = true; });
 }
 function setReturnRowState(open){
@@ -2381,6 +2418,7 @@ function setMode(m){
   document.getElementById('genOut').innerHTML = '';
   document.getElementById('addBtn').disabled = true;
   document.getElementById('refCheckRow').classList.add('hidden');
+  builtKey = null;
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
   ['genHue','genEndL','genEndC'].forEach(id => { document.getElementById(id).value = ''; });
   setImportApplied(false);
@@ -2388,6 +2426,7 @@ function setMode(m){
   if(st.value !== '' && !validStartL(parseFloat(st.value))) st.value = '';
   renderSets();
   applyModeUI();
+  updateBuildBtn();
 }
 
 loadSets();
@@ -2401,6 +2440,7 @@ try{ const v = localStorage.getItem(REF_FONT_KEY); if(v !== null) document.getEl
 resetPlateIdxToDefault();
 onRefFontChange();
 onRefPlateChange();
+['input','change'].forEach(ev => document.getElementById('selectScreen').addEventListener(ev, updateBuildBtn));
 </script>
 </body>
 </html>
