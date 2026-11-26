@@ -91,8 +91,8 @@
   .cr-win{background:rgba(0,0,0,.6); border-radius:8px; padding:2px; display:flex;}
   .cr-win input{width:38px; padding:3px 2px; text-align:center; font-size:14px; color:#fff; background:transparent; border:1px solid rgba(255,255,255,.4); border-radius:6px;}
   .float-back{
-    position:fixed; left:14px; bottom:20px; padding:9px 16px; border-radius:8px;
-    background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    position:fixed; left:14px; bottom:20px; padding:18px 32px; border-radius:12px;
+    background:var(--ok-green); color:#fff; border:1px solid var(--ok-green);
     display:flex; align-items:center; justify-content:center;
     z-index:900; box-shadow:0 2px 8px rgba(0,0,0,.4);
   }
@@ -186,7 +186,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="primary" id="buildBtn" onclick="buildTable()">Построить</button>
+        <button class="primary" id="buildBtn" onclick="onBuildBtn()">Построить</button>
         <button id="addBtn" onclick="addSet()" disabled>Добавить</button>
         <button id="showBtn" onclick="showResults()" style="margin-left:auto;">Показать</button>
       </div>
@@ -277,7 +277,7 @@
   </div>
 </div>
 
-<button type="button" id="floatBack" class="float-back hidden" onclick="backClick()" title="Вернуться к выбору"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
+<button type="button" id="floatBack" class="float-back hidden" onclick="backClick()" title="Вернуться к выбору"><svg width="48" height="32" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
 
 <div id="namesModal" class="modal-overlay hidden">
   <div class="modal-box">
@@ -387,7 +387,7 @@
 <div class="screen hidden" id="resultScreen">
   <div class="topbar">
     <div class="left-actions">
-      <button class="keep-on" onclick="backClick()" title="Вернуться к выбору" style="padding:9px 16px; display:flex; align-items:center;"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
+      <button class="keep-on" onclick="backClick()" title="Вернуться к выбору" style="padding:9px 16px; display:flex; align-items:center; background:var(--ok-green); border-color:var(--ok-green); color:#fff;"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>
       <span id="modeLabel" style="align-self:center; color:var(--dim); font-size:13px; font-weight:600;">Fonts</span>
     </div>
     <div class="sat-actions" style="margin-left:auto; margin-right:44px; display:flex; gap:8px; align-items:center;">
@@ -628,6 +628,7 @@ function buildTable(){
   if(returned) returned.dirty = false;
   document.getElementById('refCheckRow').classList.remove('hidden');
   builtKey = paramsKey();
+  if(!returned) buildState = 'built';
   updateBuildBtn();
 }
 
@@ -829,8 +830,9 @@ function selectCancel(){
   rerenderTable();
 }
 
-/* ---------- «Построить» гаснет, пока параметры не изменены ---------- */
+/* ---------- «Построить» / «Отменить» ---------- */
 let builtKey = null;
+let buildState = 'idle'; // 'built' — ряд построен и ещё не добавлен: кнопка работает как «Отменить»
 function paramsKey(){
   return ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat'].map(id => document.getElementById(id).value).join('|');
 }
@@ -838,7 +840,27 @@ function updateBuildBtn(){
   const b = document.getElementById('buildBtn');
   if(!b) return;
   if(returned && !returned.open) return;
+  if(!returned && buildState === 'built'){
+    b.textContent = 'Отменить';
+    b.disabled = false;
+    return;
+  }
+  b.textContent = 'Построить';
   b.disabled = (builtKey !== null && paramsKey() === builtKey);
+}
+function onBuildBtn(){
+  if(!returned && buildState === 'built') cancelBuild(); else buildTable();
+}
+function cancelBuild(){
+  selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
+  lastRows = null; lastRowsOriginal = null;
+  lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
+  document.getElementById('genOut').innerHTML = '';
+  document.getElementById('addBtn').disabled = true;
+  document.getElementById('refCheckRow').classList.add('hidden');
+  buildState = 'idle';
+  builtKey = null;
+  updateBuildBtn();
 }
 
 function renderTable(hue, maxVal, rows, sat, step){
@@ -1348,6 +1370,10 @@ async function addSet(){
   }
   insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: tail ? fin : nm0, nameTail: tail || undefined, isNew:true});
   saveSets();
+  buildState = 'idle';
+  builtKey = paramsKey();
+  document.getElementById('addBtn').disabled = true;
+  updateBuildBtn();
   renderSets();
   showResults();
 }
@@ -1668,7 +1694,7 @@ function renderSets(){
     const strip = s.rows.map((r, i) => {
       let inner = '';
       if(isOpen && i === retAt && !returned) inner += `<span class="ret-icon" onclick="event.stopPropagation(); returnToFirst(${s.id})">↩</span>`;
-      if(crIdx !== null && i === winAt) inner += `<span class="cr-win" onclick="event.stopPropagation()"><input type="number" class="cr-inp" step="1" value="${crIdx}" onclick="event.stopPropagation()" onchange="setCrRef(${s.id}, this.value)"></span>`;
+      if(crIdx !== null && i === winAt) inner += `<span class="cr-win" onclick="event.stopPropagation()"><input type="number" class="cr-inp" step="1" value="${crIdx}" onclick="event.stopPropagation()" oninput="liveCr(${s.id}, this.value)" onchange="setCrRef(${s.id}, this.value)"></span>`;
       return `<div style="background:#${r.hex}">${inner}</div>`;
     }).join('');
     const detail = isOpen ? detailTable(s.rows, stripCr[s.id]) : '';
@@ -1681,7 +1707,7 @@ function renderSets(){
           <button class="del-x" onclick="deleteOne(${s.id})" title="Удалить эту полоску">✕</button>
         </div>
         <div class="strip" id="strip-${s.id}" onclick="toggleDetail(${s.id})">${strip}</div>
-        ${detail}
+        <div id="detail-${s.id}">${detail}</div>
       </div>
     `;
   }).join('');
@@ -1702,6 +1728,18 @@ function crRefIdx(id){
   if(!ri || !ri.fs) return null;
   const def = ri.kind === 'font' ? fontDefault() : plateDefault();
   return Math.min(stripCr[id] || def, ri.fs.rows.length);
+}
+function liveCr(id, v){
+  const ri = crRefInfo();
+  const s = sets.find(x => x.id === id);
+  if(!ri || !ri.fs || !s) return;
+  const max = ri.fs.rows.length;
+  const t = String(v).trim();
+  if(!/^\d+$/.test(t) || +t < 1 || +t > max) return;
+  const def = Math.min(ri.kind === 'font' ? fontDefault() : plateDefault(), max);
+  if(+t === def) delete stripCr[id]; else stripCr[id] = +t;
+  const box = document.getElementById('detail-' + id);
+  if(box) box.innerHTML = detailTable(s.rows, stripCr[id]);
 }
 function setCrRef(id, v){
   const ri = crRefInfo();
@@ -1773,21 +1811,9 @@ function showSelect(){
     showToast('Сначала решите, что делать с отмеченной полосой — снимите галку.');
     return;
   }
-  const wasSync = builtKey !== null && paramsKey() === builtKey;
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('selectScreen').classList.remove('hidden');
   clearEditBoxes();
-  selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
-  lastRows = null;
-  lastRowsOriginal = null;
-  lastHue = null;
-  lastMaxVal = null;
-  lastSat = 1.0;
-  document.getElementById('addBtn').disabled = true;
-  document.getElementById('genMax').value = 255;
-  document.getElementById('genSat').value = 100;
-  document.getElementById('refCheckRow').classList.add('hidden');
-  if(wasSync) builtKey = paramsKey();
   updateBuildBtn();
 }
 
@@ -1801,7 +1827,7 @@ function captureFirstScreen(){
     fontChk: g('fontChk').checked,
     rowHidden: g('refCheckRow').classList.contains('hidden'),
     genOut: g('genOut').innerHTML, addDis: g('addBtn').disabled,
-    lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx, builtKey,
+    lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx, builtKey, buildState,
     autoFill: JSON.parse(JSON.stringify(autoFill))
   };
 }
@@ -1815,7 +1841,7 @@ function restoreFirstScreen(pre){
   lastHue = pre.lastHue; lastMaxVal = pre.lastMaxVal; lastSat = pre.lastSat;
   lastStep = pre.lastStep; lastStepOriginal = pre.lastStepOriginal;
   lastFontIdx = pre.lastFontIdx; lastPlateIdx = pre.lastPlateIdx;
-  builtKey = pre.builtKey; updateBuildBtn();
+  builtKey = pre.builtKey; buildState = pre.buildState || 'idle'; updateBuildBtn();
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
   Object.assign(autoFill, pre.autoFill);
 }
@@ -2418,7 +2444,7 @@ function setMode(m){
   document.getElementById('genOut').innerHTML = '';
   document.getElementById('addBtn').disabled = true;
   document.getElementById('refCheckRow').classList.add('hidden');
-  builtKey = null;
+  builtKey = null; buildState = 'idle';
   Object.keys(autoFill).forEach(k => delete autoFill[k]);
   ['genHue','genEndL','genEndC'].forEach(id => { document.getElementById(id).value = ''; });
   setImportApplied(false);
