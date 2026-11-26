@@ -88,6 +88,14 @@
     border:solid #fff; border-width:0 2.5px 2.5px 0; transform:rotate(45deg);
     filter:drop-shadow(0 0 1px rgba(0,0,0,.9));
   }
+  .cr-win{background:rgba(0,0,0,.6); border-radius:8px; padding:2px; display:flex;}
+  .cr-win input{width:38px; padding:3px 2px; text-align:center; font-size:14px; color:#fff; background:transparent; border:1px solid rgba(255,255,255,.4); border-radius:6px;}
+  .float-back{
+    position:fixed; right:14px; bottom:20px; width:46px; height:46px; padding:0; border-radius:50%;
+    background:rgba(0,0,0,.72); color:#fff; border:1px solid rgba(255,255,255,.35);
+    font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center;
+    z-index:900; box-shadow:0 2px 8px rgba(0,0,0,.4);
+  }
   .result{margin-top:12px; padding:12px; background:#22262c; border-radius:8px; font-size:13px;}
   .result b{font-size:15px;}
   .hint{font-size:12px; color:var(--dim); margin-top:6px;}
@@ -204,8 +212,8 @@
     <div id="refPlateBlock" class="panel hidden">
       <h2>Референсный Plate</h2>
       <div class="row" style="align-items:flex-end; flex-wrap:nowrap;">
-        <div><label>Hue (°)</label><input type="number" id="refPlateHue" min="0" max="360" oninput="onRefPlateChange()" onchange="onRefPlateChange(true)"></div>
-        <div style="flex:0 0 80px; min-width:70px;"><label>Дефолт</label><input type="number" id="refPlateDef" value="3" min="1" step="1" oninput="onRefPlateDefChange()" onchange="onRefPlateDefChange()"></div>
+        <div><label>Hue (°)</label><input type="number" id="refPlateHue" value="359" min="0" max="360" oninput="onRefPlateChange()" onchange="onRefPlateChange(true)"></div>
+        <div style="flex:0 0 80px; min-width:70px;"><label>Дефолт</label><input type="number" id="refPlateDef" value="4" min="1" step="1" oninput="onRefPlateDefChange()" onchange="onRefPlateDefChange()"></div>
         <div style="flex:0 0 auto; min-width:0;"><button type="button" class="primary" onclick="clearRefPlate()">Очистить</button></div>
       </div>
       <div id="refPlateOut"></div>
@@ -247,15 +255,14 @@
     <h2>Построенный ряд</h2>
     <div id="genOut"></div>
     <div id="refCheckRow" class="hint hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap;">
-      <div id="selBox" style="display:flex; align-items:center; gap:6px;">
+      <div id="selBox" style="display:flex; align-items:center; gap:6px; margin-right:auto;">
         <button type="button" id="selBtn" style="padding:7px 10px;" onclick="selectStart()">Выбрать</button>
         <button type="button" style="padding:7px 10px;" onclick="selectRebuild()">Перестроить</button>
         <button type="button" style="padding:7px 10px;" onclick="selectCancel()">Отменить</button>
       </div>
       <div id="plateBox" style="display:flex; align-items:center; gap:8px;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
-          <input type="checkbox" id="plateChk" onchange="onPlateChange()">
-          Контраст plate
+          Контраст
         </label>
         <input type="number" id="plateIdx" value="3" min="1" step="1" style="width:56px;" oninput="onPlateChange()" onchange="normalizePlateIdx()">
       </div>
@@ -269,6 +276,8 @@
     </div>
   </div>
 </div>
+
+<button type="button" id="floatBack" class="float-back hidden" onclick="floatBackClick()" title="На первый экран">↩</button>
 
 <div id="namesModal" class="modal-overlay hidden">
   <div class="modal-box">
@@ -333,23 +342,10 @@
 <div id="replaceModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:340px;">
     <div class="hint" id="replaceText" style="margin:0 0 16px; font-size:15px; color:var(--ink);"></div>
-    <div class="btn-row" style="justify-content:space-between;">
-      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="answerReplace(false)">Нет</button>
-      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="answerReplace(true)">Да</button>
-    </div>
-  </div>
-</div>
-
-<div id="dupNameModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:380px;">
-    <div class="hint" id="dupNameText" style="margin:0 0 16px; font-size:15px; color:var(--ink);"></div>
-    <div class="btn-row" id="dupNameAsk" style="justify-content:space-between;">
-      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="answerDupName(false)">Нет</button>
-      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="answerDupName(true)">Да</button>
-    </div>
-    <div class="btn-row hidden" id="dupNameInputRow" style="justify-content:space-between; gap:8px;">
-      <input type="text" id="dupNameInput" style="flex:1; min-width:0;" onkeydown="if(event.key==='Enter') finishDupName()">
-      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="finishDupName()">OK</button>
+    <div class="btn-row" style="justify-content:space-between; gap:8px;">
+      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="answerReplace('no')">Нет</button>
+      <button onclick="answerReplace('cancel')">Отменить</button>
+      <button style="background:var(--ok-green); border-color:var(--ok-green); color:#fff;" onclick="answerReplace('yes')">Да</button>
     </div>
   </div>
 </div>
@@ -833,13 +829,13 @@ function selectCancel(){
 
 function renderTable(hue, maxVal, rows, sat, step){
   let html = `<div class="hint" style="margin-bottom:8px;">${summaryLine(hue, maxVal, rows, sat, step)}</div>`;
-  const showCR = (mode === 'fonts' && document.getElementById('plateChk').checked && !!findRefPlateSet()) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
-  html += '<table><tr><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th><th>%</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
+  const showCR = (mode === 'fonts' && !!findRefPlateSet()) || (mode === 'plates' && document.getElementById('fontChk').checked && !!findRefFontSet());
+  html += '<table><tr><th>№</th><th></th><th>HEX</th><th>L</th><th>CIE L*</th><th>C*</th>' + (showCR ? '<th>Контраст</th>' : '') + '</tr>';
   rows.forEach((r, i) => {
     const sw = selMode
       ? `<span class="swatch sel${selChecked.has(i) ? ' on' : ''}" style="background:#${r.hex}" onclick="toggleSel(${i}, this)"></span>`
       : `<span class="swatch" style="background:#${r.hex}"></span>`;
-    html += `<tr><td>${sw}</td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td><td>${r.pct}%</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
+    html += `<tr><td>${i+1}</td><td>${sw}</td><td>${r.hex}</td><td>${r.L}</td><td>${r.real.toFixed(1)}</td><td>${r.C.toFixed(1)}</td>` + (showCR ? `<td>${contrastRef(r.hex).toFixed(1)}</td>` : '') + '</tr>';
   });
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
@@ -854,7 +850,7 @@ function summaryLine(hue, maxVal, rows, sat, step, edited){
   const stepTxt = stepVal === null ? '—' : stepVal.toFixed(1);
   const wrap = (txt, on) => on ? `<span class="edited-param">${txt}</span>` : txt;
   const cPart = `C* ${wrap(Math.round(first.C), edited.startC)}-${wrap(Math.round(last.C), edited.endC)}`;
-  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepTxt}, ${cPart}, ${first.pct}-${last.pct}%`;
+  return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satPct}%, шаг=${stepTxt}, ${cPart}`;
 }
 
 function rowsToText(rows){
@@ -956,42 +952,9 @@ function baseNameOf(s){
   }
   return nm.endsWith(s.nameTail) ? nm.slice(0, nm.length - s.nameTail.length) : nm;
 }
-let dupNameResolve = null;
-function askDupName(){
-  return new Promise(res => {
-    dupNameResolve = res;
-    document.getElementById('dupNameText').textContent = 'Такое семейство уже есть, добавить особое определение к имени?';
-    document.getElementById('dupNameAsk').classList.remove('hidden');
-    document.getElementById('dupNameInputRow').classList.add('hidden');
-    document.getElementById('dupNameInput').value = '';
-    document.getElementById('dupNameModal').classList.remove('hidden');
-  });
-}
-function closeDupName(v){
-  document.getElementById('dupNameModal').classList.add('hidden');
-  const r = dupNameResolve; dupNameResolve = null;
-  if(r) r(v);
-}
-function answerDupName(yes){
-  if(!yes){ closeDupName(null); return; }
-  document.getElementById('dupNameText').textContent = 'Определение к имени:';
-  document.getElementById('dupNameAsk').classList.add('hidden');
-  document.getElementById('dupNameInputRow').classList.remove('hidden');
-  document.getElementById('dupNameInput').focus();
-}
-function finishDupName(){
-  const v = document.getElementById('dupNameInput').value.replace(/[\\\/:*?"<>|]/g, '').trim();
-  closeDupName(v || null);
-}
 // Возвращает итоговое имя; хвост = итог минус baseEff (то, что добавлено к имени).
 async function resolveDupName(baseEff){
-  if(!nameTaken(baseEff)) return baseEff;
-  const suf = await askDupName();
-  if(suf){
-    const cand = withExtra(baseEff, suf);
-    return nameTaken(cand) ? uniqueName(cand) : cand;
-  }
-  return uniqueName(baseEff);
+  return nameTaken(baseEff) ? uniqueName(baseEff) : baseEff;
 }
 /* ---------- Смена имени семейства ---------- */
 let renameId = null;
@@ -1034,10 +997,10 @@ function askReplace(name){
     document.getElementById('replaceModal').classList.remove('hidden');
   });
 }
-function answerReplace(ok){
+function answerReplace(a){
   document.getElementById('replaceModal').classList.add('hidden');
   const r = replaceResolve; replaceResolve = null;
-  if(r) r(ok);
+  if(r) r(a);
 }
 let exportConflictResolve = null;
 function nextQueueName(queue, kind, name){
@@ -1356,9 +1319,19 @@ async function addSet(){
   }
   const nm0 = getNameForHue(lastHue);
   const eff = (nm0 || fallbackName(lastHue)).trim();
-  const fin = await resolveDupName(eff);
-  const tail = tailOf(eff, fin);
+  let fin = eff, tail = '', replaceOld = null;
+  if(nameTaken(eff)){
+    const a = await askReplace(eff);
+    if(a === 'cancel') return;
+    if(a === 'yes') replaceOld = sets.find(x => setEffName(x).toLowerCase() === eff.toLowerCase()) || null;
+    else { fin = uniqueName(eff); tail = tailOf(eff, fin); }
+  }
   if(sets.some(s => s.sig === sig)) return;
+  if(replaceOld){
+    if(editSession && editSession.id === replaceOld.id){ editSession = null; clearEditBoxesUI(); }
+    expandedSets.delete(replaceOld.id);
+    sets = sets.filter(x => x !== replaceOld);
+  }
   insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: tail ? fin : nm0, nameTail: tail || undefined, isNew:true});
   saveSets();
   renderSets();
@@ -1675,7 +1648,9 @@ function renderSets(){
     const tag = changeSuffix(s);
     const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
     const isOpen = expandedSets.has(s.id);
-    const strip = s.rows.map((r, i) => `<div style="background:#${r.hex}">${(isOpen && i === Math.max(0, s.rows.length - 2) && !returned) ? `<span class="ret-icon" onclick="event.stopPropagation(); returnToFirst(${s.id})">↩</span>` : ''}</div>`).join('');
+    const crIdx = isOpen ? crRefIdx() : null;
+    const winAt = Math.min(7, s.rows.length - 1);
+    const strip = s.rows.map((r, i) => `<div style="background:#${r.hex}">${(crIdx !== null && i === winAt) ? `<span class="cr-win" onclick="event.stopPropagation()"><input type="number" min="1" step="1" value="${crIdx}" onclick="event.stopPropagation()" onchange="setCrRef(this.value)"></span>` : ''}</div>`).join('');
     const detail = isOpen ? detailTable(s.rows) : '';
     return `
       <div class="set-block">
@@ -1691,7 +1666,55 @@ function renderSets(){
     `;
   }).join('');
   updateSelectAllBtn();
+  updateFloatBack();
 }
+
+/* ---------- Контраст на втором экране и плавающая стрелка возврата ---------- */
+function crRefInfo(){
+  if(mode === 'plates') return {fs: findRefFontSet(), kind: 'font'};
+  if(mode === 'fonts') return {fs: findRefPlateSet(), kind: 'plate'};
+  return null;
+}
+function crRefIdx(){
+  const ri = crRefInfo();
+  if(!ri || !ri.fs) return null;
+  return Math.min(ri.kind === 'font' ? fontDefault() : plateDefault(), ri.fs.rows.length);
+}
+function setCrRef(v){
+  const ri = crRefInfo();
+  if(!ri || !ri.fs){ return; }
+  let n = parseInt(v);
+  if(isNaN(n)){ renderSets(); return; }
+  n = Math.max(1, Math.min(n, ri.fs.rows.length));
+  if(ri.kind === 'font'){ document.getElementById('refFontDef').value = n; onRefFontDefChange(); }
+  else { document.getElementById('refPlateDef').value = n; onRefPlateDefChange(); }
+  renderSets();
+}
+let floatBackId = null;
+function updateFloatBack(){
+  const b = document.getElementById('floatBack');
+  const rs = document.getElementById('resultScreen');
+  if(!b || !rs) return;
+  floatBackId = null;
+  if(!rs.classList.contains('hidden') && !returned){
+    const mid = window.innerHeight / 2;
+    let bd = Infinity;
+    sets.forEach(s => {
+      if(!expandedSets.has(s.id)) return;
+      const el = document.getElementById('strip-' + s.id);
+      if(!el) return;
+      const blk = el.closest('.set-block') || el;
+      const r = blk.getBoundingClientRect();
+      const d = (r.top <= mid && r.bottom >= mid) ? 0 : Math.min(Math.abs(r.top - mid), Math.abs(r.bottom - mid));
+      if(d < bd){ bd = d; floatBackId = s.id; }
+    });
+  }
+  b.classList.toggle('hidden', floatBackId === null);
+}
+function floatBackClick(){ if(floatBackId !== null) returnToFirst(floatBackId); }
+window.addEventListener('scroll', updateFloatBack, {passive: true});
+window.addEventListener('resize', updateFloatBack);
+new MutationObserver(updateFloatBack).observe(document.getElementById('resultScreen'), {attributes: true, attributeFilter: ['class']});
 
 function clearEditBoxesUI(){
   const ids = ['editStartLVal','editEndLVal','editEndCVal'];
@@ -1741,7 +1764,7 @@ function captureFirstScreen(){
   ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat','plateIdx','fontIdx'].forEach(id => vals[id] = g(id).value);
   return {
     vals,
-    plateChk: g('plateChk').checked, fontChk: g('fontChk').checked,
+    fontChk: g('fontChk').checked,
     rowHidden: g('refCheckRow').classList.contains('hidden'),
     genOut: g('genOut').innerHTML, addDis: g('addBtn').disabled,
     lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx,
@@ -1751,7 +1774,7 @@ function captureFirstScreen(){
 function restoreFirstScreen(pre){
   const g = id => document.getElementById(id);
   Object.keys(pre.vals).forEach(id => { g(id).value = pre.vals[id]; });
-  g('plateChk').checked = pre.plateChk; g('fontChk').checked = pre.fontChk;
+  g('fontChk').checked = pre.fontChk;
   g('refCheckRow').classList.toggle('hidden', pre.rowHidden);
   g('genOut').innerHTML = pre.genOut; g('addBtn').disabled = pre.addDis;
   lastRows = pre.lastRows; lastRowsOriginal = pre.lastRowsOriginal;
@@ -1763,11 +1786,11 @@ function restoreFirstScreen(pre){
 }
 function captureContrastUI(){
   const g = id => document.getElementById(id);
-  return {plateChk: g('plateChk').checked, plateIdx: g('plateIdx').value, fontChk: g('fontChk').checked, fontIdx: g('fontIdx').value, lastPlateIdx, lastFontIdx};
+  return {plateIdx: g('plateIdx').value, fontChk: g('fontChk').checked, fontIdx: g('fontIdx').value, lastPlateIdx, lastFontIdx};
 }
 function applyContrastUI(b){
   const g = id => document.getElementById(id);
-  g('plateChk').checked = b.plateChk; g('plateIdx').value = b.plateIdx;
+  g('plateIdx').value = b.plateIdx;
   g('fontChk').checked = b.fontChk; g('fontIdx').value = b.fontIdx;
   lastPlateIdx = b.lastPlateIdx; lastFontIdx = b.lastFontIdx;
   renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
@@ -1898,7 +1921,7 @@ function addReturned(){
     showToast('Такой ряд уже есть.');
     return;
   }
-  askReplace(s.name ? s.name : fallbackName(s.hue)).then(ok => commitReturn(ok ? 'replace' : 'new'));
+  askReplace(s.name ? s.name : fallbackName(s.hue)).then(a => { if(a === 'cancel') return; commitReturn(a === 'yes' ? 'replace' : 'new'); });
 }
 
 async function commitReturn(m){
@@ -2375,8 +2398,6 @@ loadNames();
 applyModeUI();
 try{ const d = localStorage.getItem(REF_FONT_DEF_KEY); if(d !== null && d !== '') document.getElementById('refFontDef').value = d; }catch(e){}
 try{ const v = localStorage.getItem(REF_FONT_KEY); if(v !== null) document.getElementById('refFontHue').value = v; }catch(e){}
-try{ const d = localStorage.getItem(REF_PLATE_DEF_KEY); if(d !== null && d !== '') document.getElementById('refPlateDef').value = d; }catch(e){}
-try{ const v = localStorage.getItem(REF_PLATE_KEY); if(v !== null) document.getElementById('refPlateHue').value = v; }catch(e){}
 resetPlateIdxToDefault();
 onRefFontChange();
 onRefPlateChange();
