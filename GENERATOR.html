@@ -71,7 +71,10 @@
 
   #selectScreen{display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start;}
   #leftCol{flex:1 1 340px; max-width:400px;}
-  #rightCol{flex:2 1 480px; min-width:280px;}
+  #rightWrap{flex:2 1 480px; min-width:280px;}
+  #rightCol{width:100%;}
+  .prv-ret{position:relative; z-index:3; padding:9px 16px; display:flex; align-items:center; background:var(--ok-green); border-color:var(--ok-green); color:#fff;}
+  .sq-close{width:44px; height:44px; padding:0; display:flex; align-items:center; justify-content:center; font-size:26px; line-height:1; border-radius:8px; background:var(--ok-green); border-color:var(--ok-green); color:#fff;}
   #compareBlock{margin-top:18px;}
 
   table{width:100%; border-collapse:collapse; font-size:13px;}
@@ -255,6 +258,7 @@
     </div>
   </div>
 
+  <div id="rightWrap">
   <div id="rightCol" class="panel">
     <h2>Построенный ряд</h2>
     <div id="genOut"></div>
@@ -264,13 +268,16 @@
           <button type="button" id="selBtn" style="padding:7px 10px;" onclick="selectStart()">Выбрать</button>
           <button type="button" style="padding:7px 10px;" onclick="selectRebuild()">Перестроить</button>
         </span>
+        <span id="sTools" style="display:contents;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
           <input type="checkbox" id="sChk" onchange="onSChk()">
           Изменить S
         </label>
         <input type="number" id="sVal" class="hidden" min="10" max="99" step="1" style="width:56px;">
-        <button type="button" id="sApplyBtn" class="hidden" style="padding:7px 10px;" onclick="applySVals()">Применить</button>
-        <button type="button" style="padding:7px 10px;" onclick="selectCancel()">Отменить</button>
+        <button type="button" id="undoSBtn" style="padding:7px 10px;" onclick="undoS()" disabled>Отменить</button>
+        <button type="button" id="resetSBtn" style="padding:7px 10px;" onclick="askResetS()" disabled>Сброс</button>
+        </span>
+        <button type="button" id="toPreviewBtn" style="padding:7px 10px;" onclick="sendToPreview()" disabled>В Preview</button>
       </div>
       <div id="plateBox" style="display:flex; align-items:center; gap:8px;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
@@ -286,6 +293,10 @@
         <input type="number" id="fontIdx" value="1" min="1" step="1" style="width:56px;" oninput="onPlateChange()" onchange="normalizeFontIdx()">
       </div>
     </div>
+  </div>
+  <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+    <button type="button" id="previewOpenBtn" class="primary" onclick="openPreview()">Preview</button>
+  </div>
   </div>
 </div>
 
@@ -374,6 +385,25 @@
   </div>
 </div>
 
+<div id="resetSModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="hint" style="margin:0 0 16px; font-size:15px; color:var(--ink);">Сбросить все изменения S?</div>
+    <div class="btn-row" style="justify-content:space-between;">
+      <button onclick="closeResetS()">Отмена</button>
+      <button style="background:#e5484d; border-color:#e5484d; color:#fff;" onclick="confirmResetS()">Сбросить</button>
+    </div>
+  </div>
+</div>
+
+<div id="exportTargetModal" class="modal-overlay hidden" onclick="if(event.target===this) closeExportTarget()">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="btn-row" style="justify-content:space-between; margin-top:0;">
+      <button class="primary" onclick="pickExportTarget('test')">TEST_TITLE</button>
+      <button class="primary" onclick="pickExportTarget('preview')">PREVIEW</button>
+    </div>
+  </div>
+</div>
+
 <div id="exportConflictModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:380px;">
     <div class="hint" id="exportConflictText" style="margin:0 0 16px; font-size:15px; color:var(--ink);"></div>
@@ -420,6 +450,22 @@
   </div>
   <div id="setsContainer" style="margin-top:38px;"></div>
 </div>
+
+<div class="screen hidden" id="previewScreen">
+  <div class="topbar">
+    <div class="left-actions">
+      <button type="button" class="sq-close" onclick="closePreview()">✕</button>
+      <span id="pvModeLabel" style="align-self:center; color:var(--dim); font-size:13px; font-weight:600;"></span>
+    </div>
+    <div class="right-actions">
+      <button id="pvSelAllBtn" onclick="pvSelectAll()">Выбрать все</button>
+      <button onclick="pvImport()">ИМПОРТ</button>
+      <button onclick="pvDownloadTxt()">Создать txt</button>
+    </div>
+  </div>
+  <div id="previewContainer" style="margin-top:38px;"></div>
+</div>
+<button type="button" id="pvFloatClose" class="float-back sq-close hidden" style="width:48px; height:48px; padding:0; font-size:28px;" onclick="closePreview()">✕</button>
 
 <div id="toast" class="toast"></div>
 
@@ -627,6 +673,7 @@ function buildTable(){
   selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
   lastRowsOriginal = rows;
   lastRows = rows;
+  sUndo = [];
   resetFontIdxToDefault();
   resetPlateIdxToDefault();
   lastHue = hue;
@@ -796,6 +843,27 @@ function onRefFontChange(final){
 let selMode = false;
 let rebuilt = false;
 const selChecked = new Set();
+let sUndo = [];
+function updateSUndoUI(){
+  if(returned && !returned.open) return;
+  const u = document.getElementById('undoSBtn'), r = document.getElementById('resetSBtn'), p = document.getElementById('toPreviewBtn');
+  const anyOv = !!lastRows && lastRows.some(x => x.sOv !== undefined);
+  if(u) u.disabled = !sUndo.length;
+  if(r) r.disabled = !(sUndo.length || anyOv);
+  if(p) p.disabled = !lastRows || !!returned;
+}
+function askResetS(){
+  if(!lastRows) return;
+  document.getElementById('resetSModal').classList.remove('hidden');
+}
+function closeResetS(){ document.getElementById('resetSModal').classList.add('hidden'); }
+function confirmResetS(){ closeResetS(); selectCancel(); }
+function undoS(){
+  if(!lastRows || !sUndo.length) return;
+  lastRows = sUndo.pop();
+  selChecked.clear();
+  rerenderTable();
+}
 function updateSelUI(){
   const b = document.getElementById('selBtn');
   if(b) b.classList.toggle('primary', selMode);
@@ -803,7 +871,6 @@ function updateSelUI(){
   if(c){
     c.checked = selMode;
     document.getElementById('sVal').classList.toggle('hidden', !selMode);
-    document.getElementById('sApplyBtn').classList.toggle('hidden', !selMode);
     if(!selMode) document.getElementById('sVal').value = '';
   }
 }
@@ -815,22 +882,6 @@ function onSChk(){
   const on = document.getElementById('sChk').checked;
   if(on && !lastRows){ document.getElementById('sChk').checked = false; return; }
   selMode = on; selChecked.clear();
-  updateSelUI(); rerenderTable();
-}
-function applySVals(){
-  if(!lastRows || !selMode) return;
-  const t = document.getElementById('sVal').value.trim();
-  if(!/^\d{2}$/.test(t) || +t < 10){ showToast('S — двузначное число (10–99).'); return; }
-  if(!selChecked.size){ showToast('Отметьте позиции.'); return; }
-  const sv = +t, gen = Math.round((lastSat === undefined ? 1 : lastSat) * 100);
-  lastRows = lastRows.map((r, i) => {
-    if(!selChecked.has(i)) return r;
-    if(sv === gen) return rowWithSat(lastHue, r.L, lastSat, lastMaxVal);
-    const nr = rowWithSat(lastHue, r.L, sv / 100, lastMaxVal);
-    nr.sOv = sv;
-    return nr;
-  });
-  selMode = false; selChecked.clear();
   updateSelUI(); rerenderTable();
 }
 function sOverrideText(rows){
@@ -866,9 +917,22 @@ function selectStart(){
   selMode = true; selChecked.clear(); updateSelUI(); rerenderTable();
 }
 function toggleSel(i, el){
-  if(!selMode) return;
-  if(selChecked.has(i)) selChecked.delete(i); else selChecked.add(i);
-  el.classList.toggle('on', selChecked.has(i));
+  if(!selMode || !lastRows) return;
+  const t = document.getElementById('sVal').value.trim();
+  if(!/^\d{2}$/.test(t) || +t < 10){ showToast('S — двузначное число (10–99).'); return; }
+  const sv = +t, gen = Math.round((lastSat === undefined ? 1 : lastSat) * 100);
+  const cur = lastRows[i].sOv !== undefined ? lastRows[i].sOv : gen;
+  if(cur === sv) return;
+  sUndo.push(lastRows.slice());
+  lastRows = lastRows.map((r, k) => {
+    if(k !== i) return r;
+    if(sv === gen) return rowWithSat(lastHue, r.L, lastSat, lastMaxVal);
+    const nr = rowWithSat(lastHue, r.L, sv / 100, lastMaxVal);
+    nr.sOv = sv;
+    return nr;
+  });
+  selChecked.add(i);
+  rerenderTable();
 }
 const REBUILD_ENABLED = false; // функция «Перестроить» заблокирована (код сохранён)
 function selectRebuild(){
@@ -889,6 +953,7 @@ function selectRebuild(){
 }
 function selectCancel(){
   if(!lastRows || !lastRowsOriginal) return;
+  sUndo = [];
   selMode = false; selChecked.clear(); updateSelUI();
   lastRows = lastRowsOriginal.map(r => ({...r}));
   lastStep = lastStepOriginal;
@@ -907,6 +972,7 @@ function updateBuildBtn(){
   const b = document.getElementById('buildBtn');
   const c = document.getElementById('cancelRow');
   if(c) c.classList.toggle('hidden', !!returned);
+  updateSUndoUI();
   if(!b) return;
   if(returned && !returned.open) return;
   b.disabled = (builtKey !== null && paramsKey() === builtKey);
@@ -914,7 +980,7 @@ function updateBuildBtn(){
 function cancelBuild(){
   if(returned) return;
   selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
-  lastRows = null; lastRowsOriginal = null;
+  sUndo = []; lastRows = null; lastRowsOriginal = null;
   lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
   document.getElementById('genOut').innerHTML = '';
   document.getElementById('addBtn').disabled = true;
@@ -937,9 +1003,10 @@ function renderTable(hue, maxVal, rows, sat, step){
   html += '</table>';
   document.getElementById('genOut').innerHTML = html;
   document.getElementById('addBtn').disabled = !!returned && !returned.open;
+  updateSUndoUI();
 }
 
-function summaryLine(hue, maxVal, rows, sat, step, edited){
+function summaryLine(hue, maxVal, rows, sat, step, edited, period){
   edited = edited || {};
   const first = rows[0], last = rows[rows.length-1];
   const satPct = sat===undefined ? 100 : Math.round(sat*100);
@@ -948,7 +1015,16 @@ function summaryLine(hue, maxVal, rows, sat, step, edited){
   const wrap = (txt, on) => on ? `<span class="edited-param">${txt}</span>` : txt;
   const cPart = `C* ${wrap(Math.round(first.C), edited.startC)}-${wrap(Math.round(last.C), edited.endC)}`;
   const ovTxt = sOverrideText(rows);
-  const satTxt = satPct + '%' + (ovTxt ? ` (${ovTxt})` : '');
+  let satTxt;
+  if(period){
+    const eff = rows.map(r => r.sOv !== undefined ? r.sOv : satPct);
+    const a = eff[0], b = eff[eff.length-1];
+    if(eff.every(v => v === a)) satTxt = a + '%';
+    else if(a !== b) satTxt = a + '%-' + b + '%';
+    else satTxt = Math.max(...eff) + '%-' + Math.min(...eff) + '%';
+  } else {
+    satTxt = satPct + '%' + (ovTxt ? ` (${ovTxt})` : '');
+  }
   return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satTxt}, шаг=${stepTxt}, ${cPart}`;
 }
 
@@ -1204,7 +1280,30 @@ function updateExportBtn(){
   b.style.color = p ? 'hsl(0 0% 10%)' : '';
 }
 function onExportBtn(){
-  if(sets.some(x => x.selected)) sendToTest(); else reconTap();
+  if(sets.some(x => x.selected)) document.getElementById('exportTargetModal').classList.remove('hidden'); else reconTap();
+}
+function closeExportTarget(){ document.getElementById('exportTargetModal').classList.add('hidden'); }
+function pickExportTarget(t){
+  closeExportTarget();
+  if(t === 'preview') exportToPreview(); else sendToTest();
+}
+async function exportToPreview(){
+  if(hasUnsavedEdit()){
+    showToast('Есть несохранённые изменения — нажмите OK или снимите галку.');
+    return;
+  }
+  const chosen = sets.filter(s => s.selected);
+  if(!chosen.length){ showToast('Ничего не отмечено.'); return; }
+  const kind = curKind();
+  const payload = {
+    type: 'obojm_to_preview',
+    kind: kind,
+    families: chosen.map(s => { const i = genFamInfo(s, kind); return {name: i.name, hue: i.hue, params: i.params, list: i.list}; })
+  };
+  try{ await copyText(JSON.stringify(payload)); }
+  catch(e){ showToast('Не удалось скопировать.'); return; }
+  showToast('Скопировано для Preview: ' + chosen.length);
+  afterDownloadSelected();
 }
 function closeRecon(msg){
   setRecon({pending: false, ignored: {}, queue: []});
@@ -1433,10 +1532,8 @@ async function addSet(){
   }
   insertSetSorted({id: nextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep, rows: lastRows, selected:false, sig, name: tail ? fin : nm0, nameTail: tail || undefined, isNew:true});
   saveSets();
-  builtKey = paramsKey();
-  document.getElementById('addBtn').disabled = true;
-  updateBuildBtn();
   renderSets();
+  clearFirstScreen();
   showResults();
 }
 
@@ -1635,7 +1732,7 @@ async function commitEdit(mode){
     s.editedStartC = flagStart;
     s.editedEndC = flagEnd;
     s.editTag = 'Изменен';
-    if(!s.isNew && !s.wasParams) s.wasParams = summaryLine(s.hue, s.maxVal, orig.rows, orig.sat, orig.step);
+    if(!s.isNew && !s.wasParams) s.wasParams = summaryLine(s.hue, s.maxVal, orig.rows, orig.sat, orig.step, undefined, true);
     s.selected = false;
   } else {
     const newSig = s.sig;
@@ -1686,6 +1783,7 @@ function updateSelectAllBtn(){
   updateExportBtn();
 }
 let pendingDeleteId = null;
+let pendingPvDelete = null;
 function deleteOne(id){
   if(hasUnsavedEdit() && editSession.id !== id){
     showToast('Есть несохранённые изменения — нажмите OK или снимите галку.');
@@ -1701,11 +1799,19 @@ function deleteOne(id){
 }
 function closeDeleteConfirm(){
   pendingDeleteId = null;
+  pendingPvDelete = null;
   document.getElementById('deleteConfirmModal').classList.add('hidden');
 }
 function confirmDeleteOne(){
   const id = pendingDeleteId;
+  const pid = pendingPvDelete;
   closeDeleteConfirm();
+  if(pid !== null){
+    previewItems = previewItems.filter(x => x.id !== pid);
+    pvExpanded.delete(pid); delete pvStripCr[pid];
+    savePreview(); renderPreview();
+    return;
+  }
   if(id === null) return;
   if(editSession && editSession.id === id) editSession = null;
   sets = sets.filter(s => s.id !== id);
@@ -1750,7 +1856,7 @@ function renderSets(){
   }
   container.innerHTML = sets.map((s) => {
     const tag = changeSuffix(s);
-    const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}) + tag;
+    const header = (s.name ? '<b>' + String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</b> — ' : '') + summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, {startC: s.editedStartC, endC: s.editedEndC}, true) + tag;
     const isOpen = expandedSets.has(s.id);
     const crIdx = isOpen ? crRefIdx(s.id) : null;
     const retAt = Math.max(0, s.rows.length - 2);
@@ -1891,7 +1997,7 @@ function captureFirstScreen(){
     fontChk: g('fontChk').checked,
     rowHidden: g('refCheckRow').classList.contains('hidden'),
     genOut: g('genOut').innerHTML, addDis: g('addBtn').disabled,
-    lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx, builtKey,
+    lastRows, lastRowsOriginal, lastHue, lastMaxVal, lastSat, lastStep, lastStepOriginal, lastFontIdx, lastPlateIdx, builtKey, sUndo: sUndo.slice(),
     autoFill: JSON.parse(JSON.stringify(autoFill))
   };
 }
@@ -1901,7 +2007,7 @@ function restoreFirstScreen(pre){
   g('fontChk').checked = pre.fontChk;
   g('refCheckRow').classList.toggle('hidden', pre.rowHidden);
   g('genOut').innerHTML = pre.genOut; g('addBtn').disabled = pre.addDis;
-  lastRows = pre.lastRows; lastRowsOriginal = pre.lastRowsOriginal;
+  lastRows = pre.lastRows; lastRowsOriginal = pre.lastRowsOriginal; sUndo = (pre.sUndo || []).slice();
   lastHue = pre.lastHue; lastMaxVal = pre.lastMaxVal; lastSat = pre.lastSat;
   lastStep = pre.lastStep; lastStepOriginal = pre.lastStepOriginal;
   lastFontIdx = pre.lastFontIdx; lastPlateIdx = pre.lastPlateIdx;
@@ -1933,6 +2039,7 @@ function populateFromSet(s){
   if(returned) returned.exact = {end: s.rows[s.rows.length-1].C, endTxt: g('genEndC').value};
   g('genMax').value = s.maxVal;
   g('genSat').value = Math.round(s.sat * 10000) / 100;
+  sUndo = [];
   lastRows = s.rows.map(r => ({...r}));
   lastRowsOriginal = s.rows.map(r => ({...r}));
   lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
@@ -2060,7 +2167,7 @@ async function commitReturn(m){
     showToast('Такой ряд уже есть.');
     return;
   }
-  const wasP = s.isNew ? undefined : (s.wasParams || summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step));
+  const wasP = s.isNew ? undefined : (s.wasParams || summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step, undefined, true));
   const flagStart = rows[0].L !== s.rows[0].L;
   const flagEnd = rows[rows.length-1].L !== s.rows[s.rows.length-1].L;
   let name = lastHue !== s.hue ? getNameForHue(lastHue) : s.name;
@@ -2098,6 +2205,279 @@ document.getElementById('selectScreen').addEventListener('input', e => {
   }
   if(returned && returned.open && ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat'].includes(e.target.id)) returned.dirty = true;
 });
+
+
+/* ---------- Preview ---------- */
+const PREVIEW_KEY_PFX = 'generator_obojm_preview_v1_';
+let previewItems = [];
+let previewNextId = 1;
+let pvExpanded = new Set();
+let pvStripCr = {};
+function previewKey(){ return PREVIEW_KEY_PFX + mode; }
+function savePreview(){
+  try{ localStorage.setItem(previewKey(), JSON.stringify({items: previewItems, nextId: previewNextId})); }catch(e){}
+}
+function loadPreview(){
+  previewItems = []; previewNextId = 1;
+  try{
+    const d = JSON.parse(localStorage.getItem(previewKey()));
+    if(d && Array.isArray(d.items)){
+      previewItems = d.items;
+      previewNextId = d.nextId || (previewItems.reduce((m, x) => Math.max(m, x.id), 0) + 1);
+    }
+  }catch(e){}
+}
+function clearFirstScreen(){
+  const g = id => document.getElementById(id);
+  selMode = false; selChecked.clear(); rebuilt = false; sUndo = [];
+  lastRows = null; lastRowsOriginal = null;
+  lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
+  Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  ['genHue','genStart','genEndL','genEndC'].forEach(id => { g(id).value = ''; });
+  g('genStep').value = mode === 'plates' ? 5 : mode === 'subs' ? 6 : 8;
+  g('genCount').value = mode === 'plates' ? 7 : mode === 'subs' ? 12 : 8;
+  g('genMax').value = 255;
+  g('genSat').value = 100;
+  g('genOut').innerHTML = '';
+  g('addBtn').disabled = true;
+  g('refCheckRow').classList.add('hidden');
+  resetFontIdxToDefault();
+  resetPlateIdxToDefault();
+  builtKey = null;
+  updateSelUI();
+  updateBuildBtn();
+}
+function sendToPreview(){
+  if(returned || !lastRows) return;
+  const g = id => document.getElementById(id);
+  if(selMode){ selMode = false; selChecked.clear(); updateSelUI(); }
+  const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat);
+  if(!previewItems.some(x => !x.guest && x.sig === sig)){
+    const vals = {};
+    ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat','plateIdx','fontIdx'].forEach(id => vals[id] = g(id).value);
+    previewItems.push({
+      id: previewNextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep,
+      rows: lastRows.map(r => ({...r})), name: getNameForHue(lastHue) || '', sig, selected: false,
+      snap: {
+        vals, fontChk: g('fontChk').checked,
+        lastRowsOriginal: lastRowsOriginal.map(r => ({...r})), lastStepOriginal,
+        sUndo: sUndo.map(a => a.map(r => ({...r}))),
+        lastFontIdx, lastPlateIdx, autoFill: JSON.parse(JSON.stringify(autoFill))
+      }
+    });
+    savePreview();
+  }
+  clearFirstScreen();
+  openPreview();
+}
+function openPreview(){
+  if(returned){ showToast('Сначала завершите возврат.'); return; }
+  document.getElementById('selectScreen').classList.add('hidden');
+  document.getElementById('resultScreen').classList.add('hidden');
+  document.getElementById('previewScreen').classList.remove('hidden');
+  document.getElementById('pvFloatClose').classList.remove('hidden');
+  document.getElementById('pvModeLabel').textContent = mode === 'plates' ? 'Plates' : mode === 'subs' ? 'Subtitles' : 'Fonts';
+  renderPreview();
+  window.scrollTo(0, 0);
+}
+function closePreview(){
+  document.getElementById('previewScreen').classList.add('hidden');
+  document.getElementById('pvFloatClose').classList.add('hidden');
+  document.getElementById('selectScreen').classList.remove('hidden');
+  updateBuildBtn();
+  window.scrollTo(0, 0);
+}
+function pvCrIdx(id){
+  const ri = crRefInfo();
+  if(!ri || !ri.fs) return null;
+  const def = ri.kind === 'font' ? fontDefault() : plateDefault();
+  return Math.min(pvStripCr[id] || def, ri.fs.rows.length);
+}
+function pvLiveCr(id, v){
+  const ri = crRefInfo();
+  const s = previewItems.find(x => x.id === id);
+  if(!ri || !ri.fs || !s) return;
+  const max = ri.fs.rows.length;
+  const t = String(v).trim();
+  if(!/^\d+$/.test(t) || +t < 1 || +t > max) return;
+  const def = Math.min(ri.kind === 'font' ? fontDefault() : plateDefault(), max);
+  if(+t === def) delete pvStripCr[id]; else pvStripCr[id] = +t;
+  const box = document.getElementById('pvdetail-' + id);
+  if(box) box.innerHTML = detailTable(s.rows, pvStripCr[id]);
+}
+function pvSetCr(id, v){
+  const ri = crRefInfo();
+  if(!ri || !ri.fs) return;
+  const max = ri.fs.rows.length;
+  const t = String(v).trim();
+  if(!/^\d+$/.test(t) || +t < 1 || +t > max){
+    showToast('Номер плашки — целое число от 1 до ' + max + '.');
+    renderPreview();
+    return;
+  }
+  const def = Math.min(ri.kind === 'font' ? fontDefault() : plateDefault(), max);
+  if(+t === def) delete pvStripCr[id]; else pvStripCr[id] = +t;
+  renderPreview();
+}
+function pvToggle(id){
+  if(pvExpanded.has(id)){ pvExpanded.delete(id); delete pvStripCr[id]; } else pvExpanded.add(id);
+  renderPreview();
+}
+function pvToggleSelect(id, checked){
+  const s = previewItems.find(x => x.id === id);
+  if(s) s.selected = checked;
+  savePreview();
+  updatePvSelAll();
+}
+function updatePvSelAll(){
+  const b = document.getElementById('pvSelAllBtn');
+  if(!b) return;
+  const all = previewItems.length > 0 && previewItems.every(x => x.selected);
+  b.textContent = all ? 'Снять выделение' : 'Выбрать все';
+}
+function pvSelectAll(){
+  if(!previewItems.length) return;
+  const all = previewItems.every(x => x.selected);
+  previewItems.forEach(x => x.selected = !all);
+  savePreview();
+  renderPreview();
+}
+function renderPreview(){
+  const c = document.getElementById('previewContainer');
+  if(!previewItems.length){ c.innerHTML = ''; updatePvSelAll(); return; }
+  c.innerHTML = previewItems.map(s => {
+    const params = s.guest ? escHtml(s.paramsText || ('hue=' + s.hue)) : summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step);
+    const header = (s.name ? '<b>' + escHtml(s.name) + '</b> — ' : '') + params;
+    const isOpen = pvExpanded.has(s.id);
+    const crIdx = isOpen ? pvCrIdx(s.id) : null;
+    const n = s.rows.length;
+    const retAt = n >= 3 ? 1 : 0;
+    let winAt = Math.min(7, n - 1);
+    if(winAt === retAt && n > 1) winAt = n - 1 === retAt ? 0 : winAt;
+    const strip = s.rows.map((r, i) => {
+      let inner = '';
+      if(isOpen && !s.guest && i === retAt) inner += `<button type="button" class="prv-ret" onclick="event.stopPropagation(); pvReturn(${s.id})"><svg width="24" height="16" viewBox="0 0 24 16" fill="currentColor"><path d="M10 0L0 8l10 8v-5.5h14v-5H10z"/></svg></button>`;
+      if(crIdx !== null && i === winAt && !(isOpen && !s.guest && i === retAt)) inner += `<span class="cr-win" onclick="event.stopPropagation()"><input type="number" class="cr-inp" step="1" value="${crIdx}" onclick="event.stopPropagation()" oninput="pvLiveCr(${s.id}, this.value)" onchange="pvSetCr(${s.id}, this.value)"></span>`;
+      return `<div style="background:#${r.hex}">${inner}</div>`;
+    }).join('');
+    const detail = isOpen ? detailTable(s.rows, pvStripCr[s.id]) : '';
+    return `
+      <div class="set-block">
+        <div class="set-header">
+          <input type="checkbox" ${s.selected ? 'checked' : ''} onchange="pvToggleSelect(${s.id}, this.checked)">
+          <span class="set-header-text">${header}</span>
+          <button class="del-x" onclick="pvDelete(${s.id})">✕</button>
+        </div>
+        <div class="strip" onclick="pvToggle(${s.id})">${strip}</div>
+        <div id="pvdetail-${s.id}">${detail}</div>
+      </div>`;
+  }).join('');
+  updatePvSelAll();
+}
+function pvDelete(id){
+  const t = previewItems.find(x => x.id === id);
+  if(!t) return;
+  pendingDeleteId = null;
+  pendingPvDelete = id;
+  const first = t.rows[0], last = t.rows[t.rows.length - 1];
+  document.getElementById('deleteConfirmText').textContent = `Удалить полосу ${t.name ? t.name : 'hue=' + t.hue}, L ${first.L}-${last.L}?`;
+  document.getElementById('deleteConfirmModal').classList.remove('hidden');
+}
+function pvReturn(id){
+  const s = previewItems.find(x => x.id === id);
+  if(!s || s.guest || !s.snap) return;
+  if(returned){ showToast('Сначала завершите возврат.'); return; }
+  if(lastRows){ showToast('На первом экране уже есть ряд.'); return; }
+  const g = e => document.getElementById(e);
+  const sn = s.snap;
+  Object.keys(autoFill).forEach(k => delete autoFill[k]);
+  Object.assign(autoFill, sn.autoFill || {});
+  Object.keys(sn.vals).forEach(k => { g(k).value = sn.vals[k]; });
+  g('fontChk').checked = !!sn.fontChk;
+  lastRows = s.rows.map(r => ({...r}));
+  lastRowsOriginal = sn.lastRowsOriginal.map(r => ({...r}));
+  lastHue = s.hue; lastMaxVal = s.maxVal; lastSat = s.sat;
+  lastStep = s.step; lastStepOriginal = sn.lastStepOriginal;
+  sUndo = (sn.sUndo || []).map(a => a.map(r => ({...r})));
+  lastFontIdx = sn.lastFontIdx; lastPlateIdx = sn.lastPlateIdx;
+  selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
+  g('refCheckRow').classList.remove('hidden');
+  builtKey = paramsKey();
+  renderTable(lastHue, lastMaxVal, lastRows, lastSat, lastStep);
+  g('addBtn').disabled = false;
+  closePreview();
+}
+function guestRows(f){
+  const mm = /MAX=(\d+(?:\.\d+)?)/.exec(String(f.params || ''));
+  const maxVal = mm ? parseFloat(mm[1]) : 255;
+  return (Array.isArray(f.list) ? f.list : []).map(x => {
+    const p = String(x).split(':');
+    const hex = p[0].replace('#', '').toUpperCase();
+    const L = parseInt(p[1]);
+    if(!/^[0-9A-F]{6}$/.test(hex) || isNaN(L)) return null;
+    const r = parseInt(hex.slice(0, 2), 16), gg = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    return {hex, L, real: rgbToLstar255(r, gg, b), C: labC(r, gg, b).C, pct: pctOf(r, gg, b, maxVal)};
+  }).filter(Boolean);
+}
+async function pvImport(){
+  let text = null;
+  try{ text = await navigator.clipboard.readText(); }catch(e){ text = null; }
+  if(text === null){
+    document.getElementById('importPasteArea').value = '';
+    importPasteTarget = processPvImport;
+    document.getElementById('importPasteModal').classList.remove('hidden');
+    return;
+  }
+  processPvImport(text);
+}
+function processPvImport(text){
+  let p = null;
+  try{ p = JSON.parse(text); }catch(e){ p = null; }
+  if(!p || (p.type !== 'obojm_to_preview' && p.type !== 'obojm_to_test') || !Array.isArray(p.families)){
+    showToast('Данных для импорта нет.');
+    return;
+  }
+  if(p.kind && p.kind !== curKind()){ showToast('Семейства другого типа — переключите режим.'); return; }
+  let n = 0;
+  p.families.forEach(f => {
+    const rows = guestRows(f);
+    if(!rows.length) return;
+    const sig = 'g|' + String(f.name).toLowerCase() + '|' + rows.map(r => r.hex + ':' + r.L).join(',');
+    if(previewItems.some(x => x.sig === sig)) return;
+    previewItems.push({id: previewNextId++, guest: true, name: String(f.name || ''), hue: Number(f.hue), paramsText: String(f.params || ''), rows, sig, selected: false});
+    n++;
+  });
+  savePreview();
+  renderPreview();
+  showToast(n ? 'Импортировано: ' + n : 'Уже в Preview.');
+}
+function pvDownloadTxt(){
+  const chosen = previewItems.filter(s => s.selected);
+  if(!chosen.length){ showToast('Ничего не отмечено.'); return; }
+  const fname = s => (s.name ? s.name : fallbackName(s.hue)) + '.txt';
+  const done = () => { chosen.forEach(s => { s.selected = false; }); savePreview(); renderPreview(); };
+  if(chosen.length === 1){ triggerDownload(fname(chosen[0]), rowsToText(chosen[0].rows)); done(); return; }
+  if(typeof JSZip === 'undefined'){
+    chosen.forEach(s => triggerDownload(fname(s), rowsToText(s.rows)));
+    done();
+    return;
+  }
+  const zip = new JSZip();
+  const used = {};
+  chosen.forEach(s => {
+    let name = fname(s);
+    if(used[name] !== undefined){ used[name]++; name = name.replace(/\.txt$/, `_${used[name]}.txt`); } else used[name] = 0;
+    zip.file(name, rowsToText(s.rows));
+  });
+  zip.generateAsync({type: 'blob'}).then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = zipName();
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    done();
+  }).catch(e => { showToast('Ошибка при создании архива.'); });
+}
 
 /* ---------- Lab / C* (для «системного соответствия», см. переписку) ---------- */
 const LAB_Xn=0.95047, LAB_Yn=1.0, LAB_Zn=1.08883;
@@ -2256,7 +2636,7 @@ function cancelImport(){
   g('genSat').value = 100;
   g('genStep').value = pl ? 5 : 8;
   g('genCount').value = pl ? 7 : 8;
-  lastRows = null; lastRowsOriginal = null;
+  sUndo = []; lastRows = null; lastRowsOriginal = null;
   lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
   g('genOut').innerHTML = '';
   g('addBtn').disabled = true;
@@ -2480,7 +2860,7 @@ function applyModeUI(){
   document.getElementById('namesBtn').textContent = title;
   document.getElementById('namesTitle').textContent = title;
   document.getElementById('modeLabel').textContent = pl ? 'Plates' : sb ? 'Subtitles' : 'Fonts';
-  document.getElementById('selBox').classList.toggle('hidden', mode !== 'fonts');
+  document.getElementById('sTools').classList.toggle('hidden', mode !== 'fonts');
   document.getElementById('plateBox').classList.toggle('hidden', pl);
   document.getElementById('fontBox').classList.toggle('hidden', !pl);
   document.getElementById('refFontBlock').classList.toggle('hidden', !pl);
@@ -2494,15 +2874,17 @@ function setMode(m){
   if(m === mode) return;
   saveSets();
   saveNames();
+  savePreview();
   mode = m;
   try{ localStorage.setItem(MODE_KEY, mode); }catch(e){}
   sets = []; nextId = 1; expandedSets = new Set(); editSession = null;
   hueNames = [];
+  loadPreview(); pvExpanded = new Set(); pvStripCr = {};
   loadSets();
   loadNames();
   loadImports();
   renderImports();
-  lastRows = null; lastRowsOriginal = null;
+  sUndo = []; lastRows = null; lastRowsOriginal = null;
   lastHue = null; lastMaxVal = null; lastSat = 1.0; lastStep = null; lastStepOriginal = null;
   selMode = false; selChecked.clear(); rebuilt = false; updateSelUI();
   document.getElementById('genOut').innerHTML = '';
@@ -2519,6 +2901,7 @@ function setMode(m){
   updateBuildBtn();
 }
 
+loadPreview();
 loadSets();
 loadImports();
 renderImports();
