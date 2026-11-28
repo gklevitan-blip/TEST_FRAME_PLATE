@@ -138,6 +138,7 @@
     display:flex; align-items:center; justify-content:center; font-size:16px; line-height:1; cursor:pointer;
   }
   input:disabled{opacity:.55;}
+  #sVal::-webkit-outer-spin-button, #sVal::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
 
   .modal-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,.6);
@@ -271,13 +272,13 @@
         <span id="sTools" style="display:contents;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
           <input type="checkbox" id="sChk" onchange="onSChk()">
-          Изменить S
+          S=
         </label>
-        <input type="number" id="sVal" class="hidden" min="10" max="99" step="1" style="width:56px;">
+        <input type="number" id="sVal" class="hidden" min="10" max="99" step="1" style="width:40px; height:40px; padding:0; text-align:center; -moz-appearance:textfield;">
         <button type="button" id="undoSBtn" style="padding:7px 10px;" onclick="undoS()" disabled>Отменить</button>
         <button type="button" id="resetSBtn" style="padding:7px 10px;" onclick="askResetS()" disabled>Сброс</button>
         </span>
-        <button type="button" id="toPreviewBtn" style="padding:7px 10px;" onclick="sendToPreview()" disabled>В Preview</button>
+        <button type="button" id="toPreviewBtn" style="padding:7px 10px; margin-left:16px;" onclick="sendToPreview()" disabled>В Preview</button>
       </div>
       <div id="plateBox" style="display:flex; align-items:center; gap:8px;">
         <label style="display:flex; align-items:center; gap:6px; color:var(--ink); margin:6px 0; white-space:nowrap;">
@@ -458,7 +459,6 @@
       <span id="pvModeLabel" style="align-self:center; color:var(--dim); font-size:13px; font-weight:600;"></span>
     </div>
     <div class="right-actions">
-      <button id="pvSelAllBtn" onclick="pvSelectAll()">Выбрать все</button>
       <button onclick="pvImport()">ИМПОРТ</button>
       <button onclick="pvDownloadTxt()">Создать txt</button>
     </div>
@@ -1023,7 +1023,7 @@ function summaryLine(hue, maxVal, rows, sat, step, edited, period){
     else if(a !== b) satTxt = a + '%-' + b + '%';
     else satTxt = Math.max(...eff) + '%-' + Math.min(...eff) + '%';
   } else {
-    satTxt = satPct + '%' + (ovTxt ? ` (${ovTxt})` : '');
+    satTxt = satPct + '%' + (ovTxt ? `(${ovTxt})` : '');
   }
   return `hue=${hue}, L ${first.L}-${last.L}, MAX=${maxVal}, S=${satTxt}, шаг=${stepTxt}, ${cPart}`;
 }
@@ -2247,17 +2247,30 @@ function clearFirstScreen(){
   updateSelUI();
   updateBuildBtn();
 }
-function sendToPreview(){
+async function sendToPreview(){
   if(returned || !lastRows) return;
   const g = id => document.getElementById(id);
   if(selMode){ selMode = false; selChecked.clear(); updateSelUI(); }
   const sig = computeSignature(lastHue, lastMaxVal, lastRows, lastSat);
   if(!previewItems.some(x => !x.guest && x.sig === sig)){
+    const nm0 = getNameForHue(lastHue);
+    const eff = (nm0 || fallbackName(lastHue)).trim();
+    let fin = eff, tail = '', replaceOld = null;
+    if(pvNameTaken(eff)){
+      const a = await askReplace(eff);
+      if(a === 'cancel') return;
+      if(a === 'yes') replaceOld = previewItems.find(x => !x.guest && pvEffName(x).toLowerCase() === eff.toLowerCase()) || null;
+      else { fin = pvUniqueName(eff); tail = tailOf(eff, fin); }
+    }
+    if(replaceOld){
+      pvExpanded.delete(replaceOld.id); delete pvStripCr[replaceOld.id];
+      previewItems = previewItems.filter(x => x !== replaceOld);
+    }
     const vals = {};
     ['genHue','genStart','genStep','genCount','genEndL','genEndC','genMax','genSat','plateIdx','fontIdx'].forEach(id => vals[id] = g(id).value);
     previewItems.push({
       id: previewNextId++, hue: lastHue, maxVal: lastMaxVal, sat: lastSat, step: lastStep,
-      rows: lastRows.map(r => ({...r})), name: getNameForHue(lastHue) || '', sig, selected: false,
+      rows: lastRows.map(r => ({...r})), name: tail ? fin : nm0, sig, selected: false,
       snap: {
         vals, fontChk: g('fontChk').checked,
         lastRowsOriginal: lastRowsOriginal.map(r => ({...r})), lastStepOriginal,
@@ -2269,6 +2282,14 @@ function sendToPreview(){
   }
   clearFirstScreen();
   openPreview();
+}
+function pvEffName(x){ return (x.name ? x.name : fallbackName(x.hue)).trim(); }
+function pvNameTaken(n){ const l = n.toLowerCase(); return previewItems.some(x => !x.guest && pvEffName(x).toLowerCase() === l); }
+function pvUniqueName(base){ let n = 1; while(pvNameTaken(withExtra(base, n))) n++; return withExtra(base, n); }
+function pvIsBase(s){
+  if(!s.guest) return false;
+  const l = String(s.name || '').trim().toLowerCase();
+  return previewItems.some(x => !x.guest && Number(x.hue) === Number(s.hue) && pvEffName(x).toLowerCase() === l);
 }
 function openPreview(){
   if(returned){ showToast('Сначала завершите возврат.'); return; }
@@ -2347,7 +2368,7 @@ function renderPreview(){
   if(!previewItems.length){ c.innerHTML = ''; updatePvSelAll(); return; }
   c.innerHTML = previewItems.map(s => {
     const params = s.guest ? escHtml(s.paramsText || ('hue=' + s.hue)) : summaryLine(s.hue, s.maxVal, s.rows, s.sat, s.step);
-    const header = (s.name ? '<b>' + escHtml(s.name) + '</b> — ' : '') + params;
+    const header = (s.name ? '<b>' + escHtml(s.name) + '</b>' + (pvIsBase(s) ? ' <span class="edited-param">BASE</span>' : '') + ' — ' : '') + params;
     const isOpen = pvExpanded.has(s.id);
     const crIdx = isOpen ? pvCrIdx(s.id) : null;
     const n = s.rows.length;
